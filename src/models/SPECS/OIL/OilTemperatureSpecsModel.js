@@ -17,27 +17,11 @@ class OilTemperatureSpecsModel {
   }
 
   /**
-   * MÉTODO PRINCIPAL: Lê streams/hash do Redis, avalia as regras v2 e publica na stream health
+   * MÉTODO PRINCIPAL: Avalia as regras v2 baseado nas métricas injetadas
    */
-  async processar(sensorName,metrics) {
+  async processar(sensorName, metrics) {
     try {
-    // 1. FRESH CHECK STATE: Busca o estado atual na Hash (mantemos, é necessário)
-          const state = await redisConfig.client.hgetall('kombi:engine:state') || {};
-
-          const currentVal = metrics.value;
-          const taxaSegundo = metrics.taxaSubidaPorMinuto / 60;
-          const stack = [];
-
-          // Mapeamento local limpo
-          const currentValues = {
-            OIL_TEMP: currentVal,
-            CHT: state.CHT ? JSON.parse(state.CHT).value : 0,
-            RPM: state.RPM ? JSON.parse(state.RPM).value : 0,
-            OIL_PRESSURE: state.OIL_PRESSURE ? JSON.parse(state.OIL_PRESSURE).value : 0,
-            KNOCK: state.KNOCK ? JSON.parse(state.KNOCK).value : 0
-          };
-
-      // 2. FRESH CHECK STATE: Busca o estado atual imediato dos outros sensores na Hash do Redis
+      // 1. FRESH CHECK STATE: Busca o estado atual na Hash do Redis
       const state = await redisConfig.client.hgetall('kombi:engine:state') || {};
 
       const currentVal = metrics.value;
@@ -53,14 +37,14 @@ class OilTemperatureSpecsModel {
         KNOCK: state.KNOCK ? JSON.parse(state.KNOCK).value : 0
       };
 
-      // 3. GERENCIAMENTO DE RISCO ESTÁTICO (Identifica a faixa física atual do óleo)
+      // 2. GERENCIAMENTO DE RISCO ESTÁTICO (Identifica a faixa física atual do óleo)
       let currentRange = 'OPERACIONAL';
       const ranges = this.specs.thresholds.OIL_TEMP.ranges;
       if (currentVal >= ranges.CRITICO.min) currentRange = 'CRITICO';
       else if (currentVal >= ranges.ALERTA.min) currentRange = 'ALERTA';
       else if (currentVal < ranges.FRIO.max) currentRange = 'FRIO';
 
-      // 4. AVALIAÇÃO DE REGRAS DIRETAS (Estouro de barreiras físicas e emergências como KNOCK)
+      // 3. AVALIAÇÃO DE REGRAS DIRETAS
       for (const rule of this.specs.direct_rules) {
         let condicoesValidas = true;
 
@@ -89,7 +73,7 @@ class OilTemperatureSpecsModel {
         }
       }
 
-      // 5. AVALIAÇÃO DE REGRAS PREDITIVAS (Análise cinético-térmica por passos de tempo / ETA)
+      // 4. AVALIAÇÃO DE REGRAS PREDITIVAS
       if (taxaSegundo > 0) {
         for (const rule of this.specs.predictive_rules) {
           let piorEtaDaRegra = null;
@@ -98,17 +82,14 @@ class OilTemperatureSpecsModel {
           for (const target of rule.target_conditions) {
             const valorAtualSensor = currentValues[target.sensor] || 0;
             
-            // Se o sensor já atingiu ou passou do valor alvo fisicamente, o ETA zera (estourou)
             if (valorAtualSensor >= target.value) {
               piorEtaDaRegra = 0;
               continue;
             }
 
-            // Calcula em quantos segundos a rampa atual vai atingir o valor crítico do alvo
             const etaSensor = (target.value - valorAtualSensor) / taxaSegundo;
-            
-            // Só faz sentido avaliar se o ETA calculado estiver dentro da janela máxima da regra
             const maxEtaConfigurado = Math.max(...Object.values(rule.eta_steps).map(s => s.max_eta));
+            
             if (etaSensor > 0 && etaSensor <= maxEtaConfigurado) {
               piorEtaDaRegra = piorEtaDaRegra === null ? etaSensor : Math.max(piorEtaDaRegra, etaSensor);
             } else {
@@ -117,7 +98,6 @@ class OilTemperatureSpecsModel {
             }
           }
 
-          // Se a rampa projeta colapso, acha em qual degrau configurado do JSON o ETA se encaixa
           if (condicoesValidas && piorEtaDaRegra !== null) {
             let estagioIdentificado = null;
             let dadosEstagio = null;
@@ -130,7 +110,6 @@ class OilTemperatureSpecsModel {
               }
             }
 
-            // Se o colapso é iminente ou já estourou (ETA zero), assume o pior cenário configurado (menor eta)
             if (piorEtaDaRegra === 0) {
               estagioIdentificado = 'PREDICTIVE_2';
               dadosEstagio = rule.eta_steps.PREDICTIVE_2;
@@ -155,19 +134,28 @@ class OilTemperatureSpecsModel {
         }
       }
 
-  // 6. RETORNO DO DIAGNÓSTICO (Não publica mais daqui)
-        if (stack.length > 0) {
-          stack.sort((a, b) => b.grau - a.grau);
-          return stack[0]; 
-        }
-
-        return { /* Objeto diagnóstico default */ };
-
-      } catch (err) {
-        console.error(`❌ [${this.NAME}] Erro:`, err.message);
-        throw err;
+      // 5. FILTRAGEM DO DIAGNÓSTICO MAIS CRÍTICO
+      if (stack.length > 0) {
+        stack.sort((a, b) => b.grau - a.grau);
+        return stack[0]; 
       }
+
+      // Retorna objeto default se tudo estiver ok
+      return {
+        current_range: currentRange,
+        active_rule: 'NONE',
+        grau: 0,
+        severity: 'OPERACIONAL',
+        type: 'STABLE',
+        contention: { plan: 'none', value: '0%', solution: [] },
+        description: `Motor operando em regime estável na faixa ${currentRange}.`
+      };
+
+    } catch (err) {
+      console.error(`❌ [${this.NAME}] Erro ao processar pipeline de especificações:`, err.message);
+      throw err;
     }
+  }
 }
 
 module.exports = new OilTemperatureSpecsModel();
