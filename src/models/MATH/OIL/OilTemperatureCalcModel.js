@@ -1,6 +1,6 @@
 // src/models/MATH/OIL/OilTemperatureCalcModel.js
-const redisConfig = require('../../../Redis/Config/redisConfig');
-const publisherService = require('../../../database/Redis/Publisher/PublisherService'); // Injetado para o subscribe
+const redisConfig = require('../../../Infra/Redis/config/redisConfig');
+const publisherService = require('../../../Infra/Redis/Publisher/PublisherService'); // Injetado para o subscribe
 
 class OilTemperatureCalcModel {
   constructor() {
