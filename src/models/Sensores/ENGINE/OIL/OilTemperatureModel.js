@@ -20,7 +20,7 @@ class OilTemperatureModel {
         const diagnosis = await oilTemperatureSpecsModel.processar(this.name, metrics);
         
         // 3. Publica a versão final completa (Métricas + Diagnóstico validado)
-        publisherService.health(this.name, metrics, diagnosis);
+        PublisherService.health(this.name, metrics, diagnosis);
 
       } catch (err) {
         console.error(`❌ [${this.name}_MODEL] Erro fatal no pipeline:`, err.message);
