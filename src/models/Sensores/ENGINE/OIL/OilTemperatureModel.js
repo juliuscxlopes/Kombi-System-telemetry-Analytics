@@ -1,6 +1,7 @@
 // src/models/ENGINE/OIL/OilTemperatureModel.js
 const oilTemperatureCalcModel = require('../../../MATH/OIL/OilTemperatureCalcModel');
 const oilTemperatureSpecsModel = require('../../../SPECS/OIL/OilTemperatureSpecsModel');
+const PublisherService = require('../../../Infra/Redis/Publisher/PublisherService');
 
 class OilTemperatureModel {
   constructor() {
