@@ -8,14 +8,14 @@ class WorkerHealth {
   }
 
   start() {
-    console.log("📡 [WORKER] Sentinela de Infraestrutura Inicializado (Modo Alerta/Crítico Orientado a Eventos).");
+    console.log("📡 [WORKER] Sentinela de Infraestrutura Inicializado (Modo Reativo Irrestrito).");
     this.isListening = true;
     this.escutarAlertas();
   }
 
   /**
    * Ciclo de escuta bloqueante focado na Stream de Alertas.
-   * O Worker só acorda quando o Core identificar uma anomalia na tag.
+   * Acorda com QUALQUER anomalia notificada pelo Core.
    */
   async escutarAlertas() {
     let lastId = '$';
@@ -39,12 +39,12 @@ class WorkerHealth {
           const payloadIdx = fields.indexOf('payload');
           if (payloadIdx !== -1) {
             const alerta = JSON.parse(fields[payloadIdx + 1]);
-            const { sensor, severity, value } = alerta; // Ex: { sensor: 'OIL_TEMP', severity: 'CRITICAL', value: 130.2 }
+            const { sensor, status, tag, value } = alerta; 
 
-            if (sensor && (severity === 'ALERT' || severity === 'CRITICAL')) {
-              console.warn(`🚨 [WORKER_HEALTH] Alerta recebido via Core para ${sensor}. Severidade: ${severity}. Valor: ${value}`);
+            if (sensor && (status === 'ALERTA' || status === 'CRITICO' || status === 'ALERT' || status === 'CRITICAL')) {
+              console.warn(`🚨 [WORKER_HEALTH] Alerta/Anomalia recebida [Tag: ${tag}] para ${sensor}. Status: ${status}. Valor: ${value}`);
               
-              // Aciona o controlador com a anomalia informada
+              // Aciona o controlador com a anomalia informada repassando a chave inteira
               await this.processarAlerta(sensor);
             }
           }
@@ -69,14 +69,12 @@ class WorkerHealth {
       const payload = JSON.parse(engineState[sensorName]);
       const valorAtual = payload.value !== undefined ? payload.value : payload.val;
 
-      // Chama o controller para processar o colapso/estouro de barreira
+      // Chama o controller para processar o estouro de barreira sem intermediários
       await sensorRouterController.rotear(sensorName, valorAtual, engineState);
     } catch (err) {
       console.error(`❌ [WORKER_HEALTH] Erro ao processar alerta do sensor ${sensorName}:`, err.message);
     }
   }
-
-  //Aqui ainda preciso que todo alerta seja registrado na stream de logs, para manter a linha do tempo completa
 
   stop() {
     this.isListening = false;
