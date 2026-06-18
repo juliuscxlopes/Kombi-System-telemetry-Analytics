@@ -1,0 +1,20 @@
+services:
+  kombi-analytics:
+    build: .
+    container_name: telemetry-analytics
+    restart: always
+    networks:
+      - kombi-network
+    environment:
+      - REDIS_HOST=redis-msg-center
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    deploy:
+      resources:
+        limits:
+          cpus: '0.30'
+          memory: 128M
+
+networks:
+  kombi-network:
+    external: true

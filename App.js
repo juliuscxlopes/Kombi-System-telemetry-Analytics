@@ -1,3 +1,4 @@
+// src/App.js
 require('dotenv').config();
 const healthWorker = require('./src/Redis/worker/WorkerHealth');
 const redis = require('./src/Redis/Config/redisConfig');
@@ -5,27 +6,23 @@ const redis = require('./src/Redis/Config/redisConfig');
 async function bootstrap() {
   try {
     console.log("🧠 [SYSTEM] Iniciando Cérebro Analytics - Kombi System");
-    console.log("--------------------------------------------------");
+    
+    await redis.client.connect(); // Certifique-se de conectar antes de usar
+    console.log("✅ [REDIS] Conectado ao host:", process.env.REDIS_HOST);
 
-    await redis.client.ping();
-    console.log("✅ [REDIS] Conexão estabelecida com sucesso.");
-
-    // 2. Inicia o Worker de Saúde
-    // Ele vai assinar a stream 'engine' e rodar o loop de processamento de 1s
+    // Inicia o Worker (que já está com while(this.running))
     healthWorker.start();
 
-    // 3. Tratamento de Encerramento (Graceful Shutdown)
-    // Se você der Ctrl+C, limpamos os intervalos e fechamos conexões
+    // Tratamento de interrupção
     process.on('SIGINT', async () => {
-      console.log("\n🛑 [SYSTEM] Desligando Analytics...");
-      // Se houver intervalos no healthWorker, você pode criar um método stop()
+      console.log("\n🛑 [SYSTEM] Parando Analytics...");
+      healthWorker.stop(); // Muda o running para false
+      await redis.client.quit();
       process.exit(0);
     });
 
-    console.log("🏁 [SYSTEM] Analytics operando. Monitorando Streams de Inteligência...");
-
   } catch (err) {
-    console.error("❌ [FATAL] Erro ao iniciar Analytics:", err);
+    console.error("❌ [FATAL] Erro:", err);
     process.exit(1);
   }
 }
