@@ -1,13 +1,14 @@
 // src/Infra/Redis/Publisher/PublisherService.js
-const redisConfig = require('../config/redisConfig');
+const redisConfig = require('../config/redisConfig'); // Seu client Redis configurado
 
 class PublisherService {
   constructor() {
     // Centraliza o mapeamento exato das suas 3 streams principais
+    // Usando redisConfig.STREAMS conforme definido no seu redisConfig.js
     this.STREAMS = {
-      HEALTH: redis.STREAMS?.HEALTH || 'stream:health',
-      ACTUATOR: redis.STREAMS?.ACTUATOR || 'stream:actuators',
-      LOG: redis.STREAMS?.LOG || 'stream:logs:actuators'
+      HEALTH: redisConfig.STREAMS?.HEALTH || 'stream:health',
+      ACTUATOR: redisConfig.STREAMS?.ACTUATOR || 'stream:actuators',
+      LOG: redisConfig.STREAMS?.LOG || 'stream:logs:actuators'
     };
   }
 
@@ -71,8 +72,8 @@ class PublisherService {
    * 🚀 Método privado Fire-and-Forget usando XADD para não bloquear o Kernel
    */
   _fireAndForget(streamName, payload) {
-    // Injeta na stream usando o ID auto-gerado '*' do Redis
-    redis.xadd(streamName, '*', 'payload', JSON.stringify(payload))
+    // Aponta para redisConfig.client para acessar a instância do ioredis e o método xadd
+    redisConfig.client.xadd(streamName, '*', 'payload', JSON.stringify(payload))
       .catch(err => console.error(`❌ [PUBLISHER-SERVICE] Erro assíncrono na stream ${streamName}:`, err.message));
   }
 }
