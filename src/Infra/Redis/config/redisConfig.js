@@ -10,16 +10,15 @@ class RedisConfig {
       retryStrategy: (times) => Math.min(times * 50, 2000),
     });
 
-    // 🎯 RIGOROSAMENTE ALINHADO COM SEU STREAMRULES.JS
     this.STREAMS = {
-      LOG: 'kombi:stream:log',       // Linha do tempo central (tudo entra aqui)
-      HEALTH: 'kombi:stream:health',  // Health Check reativo (Métricas + Diagnosis)
-      ALERTS:'kombi:stream:alerts'     // Alertas críticos (diagnósticos graves)
+      LOG: 'barramento:stream:log',
+      HEALTH: 'barramento:stream:health',
+      ALERTS: 'barramento:stream:alerts'
     };
 
     this.HASHES = {
-      ENGINE_STATE: 'kombi:engine:state',      // Foto dos sensores
-      ACTUATORS_STATE: 'kombi:actuators:state' // Foto dos atuadores
+      ENGINE_STATE: 'motor:engine:state',
+      ACTUATORS_STATE: 'motor:actuators:state'
     };
 
     this._initEvents();
