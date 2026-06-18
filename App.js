@@ -6,10 +6,7 @@ const redis = require('./src/Infra/Redis/config/redisConfig');
 async function bootstrap() {
   try {
     console.log("🧠 [SYSTEM] Iniciando Cérebro Analytics - Kombi System");
-    
-    await redis.client.connect(); // Certifique-se de conectar antes de usar
-    console.log("✅ [REDIS] Conectado ao host:", process.env.REDIS_HOST);
-
+  
     // Inicia o Worker (que já está com while(this.running))
     healthWorker.start();
 
