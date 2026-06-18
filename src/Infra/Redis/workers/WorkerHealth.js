@@ -5,53 +5,46 @@ const sensorRouterController = require('../../../Controllers/SensorRouterControl
 class WorkerHealth {
   constructor() {
     this.isListening = false;
+    this.pollIntervalMs = 1000; // Roda a verificação a cada 1 segundo (ajustável)
   }
 
   start() {
-    console.log("📡 [WORKER] Sentinela de Infraestrutura Inicializado (Modo Reativo Irrestrito).");
+    console.log("📡 [WORKER] Sentinela de Infraestrutura Inicializado (Modo Sentinela de Contenção via HSET).");
     this.isListening = true;
-    this.escutarAlertas();
+    this.monitorarAlertas();
   }
 
   /**
-   * Ciclo de escuta bloqueante focado na Stream de Alertas.
-   * Acorda com QUALQUER anomalia notificada pelo Core.
+   * Ciclo de monitoramento (polling) na HSET de Alertas Ativos.
+   * Lê o painel de anomalias, processa as providências e monitora até normalizar.
    */
-  async escutarAlertas() {
-    let lastId = '$';
-
+  async monitorarAlertas() {
     while (this.isListening) {
       try {
-        // Escuta bloqueante na stream de alertas do Core: 'kombi:stream:alerts'
-        const streamData = await redisConfig.client.xread(
-          'BLOCK', 5000, 
-          'STREAMS', 'kombi:stream:alerts', 
-          lastId
-        );
+        // Pega todos os alertas ativos no quadro unificado (HSET motor:alerts:state)
+        const alertasAtivos = await redisConfig.client.hgetall(redisConfig.HASHES.ALERTS);
 
-        if (!streamData) continue;
-
-        const [key, messages] = streamData[0];
-        
-        for (const [messageId, fields] of messages) {
-          lastId = messageId; 
-
-          const payloadIdx = fields.indexOf('payload');
-          if (payloadIdx !== -1) {
-            const alerta = JSON.parse(fields[payloadIdx + 1]);
-            const { sensor, status, tag, value } = alerta; 
-
-            if (sensor && (status === 'ALERTA' || status === 'CRITICO' || status === 'ALERT' || status === 'CRITICAL')) {
-              console.warn(`🚨 [WORKER_HEALTH] Alerta/Anomalia recebida [Tag: ${tag}] para ${sensor}. Status: ${status}. Valor: ${value}`);
-              
-              // Aciona o controlador com a anomalia informada repassando a chave inteira
-              await this.processarAlerta(sensor);
-            }
-          }
+        // Se o quadro estiver vazio, não há anomalias para combater, apenas aguarda o próximo ciclo
+        if (!alertasAtivos || Object.keys(alertasAtivos).length === 0) {
+          await new Promise(resolve => setTimeout(resolve, this.pollIntervalMs));
+          continue;
         }
+
+        // Itera sobre cada sensor que está registrado como alerta/crítico no quadro
+        for (const [sensorName, alertaString] of Object.entries(alertasAtivos)) {
+          const alerta = JSON.parse(alertaString);
+          console.warn(`🚨 [WORKER_HEALTH] Combatendo anomalia | Sensor: ${alerta.sensor} | Status: ${alerta.status} | Ticket: ${alerta.ticket}`);
+
+          // Aciona o controlador com a anomalia para garantir a atuação mínima
+          await this.processarAlerta(sensorName);
+        }
+
+        // Aguarda o intervalo do próximo ciclo de contenção
+        await new Promise(resolve => setTimeout(resolve, this.pollIntervalMs));
+
       } catch (err) {
         if (this.isListening) {
-          console.error('❌ [WORKER_HEALTH] Erro na escuta da stream de alertas:', err.message);
+          console.error('❌ [WORKER_HEALTH] Erro no ciclo de contenção do quadro de alertas:', err.message);
           await new Promise(resolve => setTimeout(resolve, 2000));
         }
       }
@@ -59,20 +52,21 @@ class WorkerHealth {
   }
 
   /**
-   * Pega o estado atualizado do sensor na HSET para repassar ao pipeline.
+   * Pega o estado atualizado do sensor na HSET principal para repassar ao pipeline.
    */
   async processarAlerta(sensorName) {
     try {
+      // Busca a foto instantânea do motor
       const engineState = await redisConfig.client.hgetall(redisConfig.HASHES.ENGINE_STATE);
       if (!engineState || !engineState[sensorName]) return;
 
       const payload = JSON.parse(engineState[sensorName]);
       const valorAtual = payload.value !== undefined ? payload.value : payload.val;
 
-      // Chama o controller para processar o estouro de barreira sem intermediários
+      // Chama o controller para processar a análise e tomar providências
       await sensorRouterController.rotear(sensorName, valorAtual, engineState);
     } catch (err) {
-      console.error(`❌ [WORKER_HEALTH] Erro ao processar alerta do sensor ${sensorName}:`, err.message);
+      console.error(`❌ [WORKER_HEALTH] Erro ao processar contenção do sensor ${sensorName}:`, err.message);
     }
   }
 

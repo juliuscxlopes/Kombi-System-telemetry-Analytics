@@ -1,45 +1,36 @@
-// Analytics/src/DataBase/Redis/Config/redisConfig.js
+// Arquivo: src/Infra/Redis/config/redisConfig.js
 const Redis = require('ioredis');
+require('dotenv').config();
 
-class RedisConfig {
+class redisConfig {
   constructor() {
     this.client = new Redis({
-      host: process.env.REDIS_HOST,
-      port: process.env.REDIS_PORT,
-      password: process.env.REDIS_PASSWORD,
-      retryStrategy: (times) => Math.min(times * 50, 2000),
+      host: process.env.REDIS_HOST || 'redis-msg-center',
+      port: parseInt(process.env.REDIS_PORT, 10) || 6379,
+      password: process.env.REDIS_PASSWORD || undefined, 
+      maxRetriesPerRequest: null,
+      retryStrategy: (times) => Math.min(times * 50, 2000), // Reconexão agressiva para ambiente embarcado
     });
-
+    
+    // 🎯 Chaves únicas, namespaces e centralizadas do StreamRules.js (Single Source of Truth)
     this.STREAMS = {
-      LOG: 'barramento:stream:log',
-      HEALTH: 'barramento:stream:health',
-      ALERTS: 'barramento:stream:alerts'
+      LOG: 'barramento:stream:log',      // Linha do tempo central (Append-Only / XADD)
+      HEALTH: 'barramento:stream:health'  // Health Check Reativo
     };
 
     this.HASHES = {
-      ENGINE_STATE: 'motor:engine:state',
-      ACTUATORS_STATE: 'motor:actuators:state'
+      ENGINE_STATE: 'motor:engine:state',      // Foto instantânea e atualizada dos sensores
+      ACTUATORS_STATE: 'motor:actuators:state', // Estado atual dos atuadores físicos
+      ALERTS: 'motor:alerts:state'             // Quadro de Alertas Ativos (tracking de contenção)
     };
 
     this._initEvents();
   }
 
   _initEvents() {
-    this.client.on('connect', () => console.log('🧠 [REDIS] Analytics conectado com sucesso.'));
-    this.client.on('error', (err) => console.error('🚨 [REDIS] Erro no Redis:', err.message));
-  }
-
-  /**
-   * Método padrão de leitura bloqueante para o Worker escutar a saúde
-   */
-  async readStream(streamKey, lastId = '$', count = 1) {
-    try {
-      return await this.client.xread('COUNT', count, 'BLOCK', 5000, 'STREAMS', streamKey, lastId);
-    } catch (err) {
-      console.error(`❌ [REDIS] Erro ao ler stream ${streamKey}:`, err.message);
-      return null;
-    }
+    this.client.on('connect', () => console.log('🧠 [CORE-REDIS] Conectado ao Barramento Central via Kernel.'));
+    this.client.on('error', (err) => console.error('🚨 [CORE-REDIS] Erro de conexão no barramento:', err.message));
   }
 }
 
-module.exports = new RedisConfig();
+module.exports = new redisConfig();
