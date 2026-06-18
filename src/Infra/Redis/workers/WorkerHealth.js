@@ -1,6 +1,6 @@
-// src/Redis/worker/WorkerHealth.js
-const redisConfig = require('../../DataBase/Redis/Config/redisConfig');
-const sensorRouterController = require('../../controllers/SensorRouterController');
+// src/Infra/Redis/workers/WorkerHealth.js
+const redisConfig = require('../config/redisConfig');
+const sensorRouterController = require('../../../Controllers/SensorRouterController');
 
 class WorkerHealth {
   constructor() {

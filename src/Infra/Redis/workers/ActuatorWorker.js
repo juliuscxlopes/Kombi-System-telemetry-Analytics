@@ -1,5 +1,5 @@
-// src/workers/ActuatorWorker.js
-const redisConfig = require('../Redis/Config/redisConfig');
+// src/Infra/Redis/workers/ActuatorWorker.js
+const redisConfig = require('../config/redisConfig');
 
 class ActuatorWorker {
   constructor() {

@@ -1,5 +1,5 @@
 // src/models/ACTUATOR/FanOilActuatorModel.js
-const redisConfig = require('../../../Redis/Config/redisConfig');
+const redisConfig = require('../../Infra/Redis/config/redisConfig');
 
 class FanOilActuatorModel {
   constructor() {

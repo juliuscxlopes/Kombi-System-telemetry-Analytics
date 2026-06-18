@@ -1,7 +1,7 @@
 // src/App.js
 require('dotenv').config();
-const healthWorker = require('./src/Redis/worker/WorkerHealth');
-const redis = require('./src/Redis/Config/redisConfig');
+const healthWorker = require('./src/Infra/Redis/workers/WorkerHealth');
+const redis = require('./src/Infra/Redis/config/redisConfig');
 
 async function bootstrap() {
   try {

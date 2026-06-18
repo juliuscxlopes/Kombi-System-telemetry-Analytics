@@ -1,5 +1,5 @@
-// src/database/Redis/Publisher/PublisherService.js
-const redis = require('../Config/redisConfig'); // Seu client Redis configurado
+// src/Infra/Redis/Publisher/PublisherService.js
+const redis = require('../config/redisConfig'); // Seu client Redis configurado
 
 class PublisherService {
   constructor() {

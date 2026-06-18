@@ -1,6 +1,6 @@
 // src/models/ENGINE/OIL/OilTemperatureModel.js
-const oilTemperatureCalcModel = require('../../MATH/OIL/OilTemperatureCalcModel');
-const oilTemperatureSpecsModel = require('../../SPECS/OIL/OilTemperatureSpecsModel');
+const oilTemperatureCalcModel = require('../../../MATH/OIL/OilTemperatureCalcModel');
+const oilTemperatureSpecsModel = require('../../../SPECS/OIL/OilTemperatureSpecsModel');
 
 class OilTemperatureModel {
   constructor() {

@@ -1,7 +1,7 @@
 // src/models/SPECS/OIL/OilTemperatureSpecsModel.js
-const redisConfig = require('../../../Redis/Config/redisConfig');
-const oilSpecs = require('../../../infra/specs/oil_specs.json');
-const publisherService = require('../../../database/Redis/Publisher/PublisherService');
+const redisConfig = require('../../../Infra/Redis/config/redisConfig');
+const oilSpecs = require('./oil_specs.json');
+const publisherService = require('../../../Infra/Redis/Publisher/PublisherService');
 
 const OPERATORS = {
   '>': (a, b) => a > b,
