@@ -13,7 +13,8 @@ class RedisConfig {
     // 🎯 RIGOROSAMENTE ALINHADO COM SEU STREAMRULES.JS
     this.STREAMS = {
       LOG: 'kombi:stream:log',       // Linha do tempo central (tudo entra aqui)
-      HEALTH: 'kombi:stream:health'  // Health Check reativo (Métricas + Diagnosis)
+      HEALTH: 'kombi:stream:health',  // Health Check reativo (Métricas + Diagnosis)
+      ALERTS:'kombi:stream:alerts'     // Alertas críticos (diagnósticos graves)
     };
 
     this.HASHES = {

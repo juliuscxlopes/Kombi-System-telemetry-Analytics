@@ -4,47 +4,83 @@ const sensorRouterController = require('../../../Controllers/SensorRouterControl
 
 class WorkerHealth {
   constructor() {
-    this.intervalId = null;
+    this.isListening = false;
   }
 
   start() {
-    console.log("📡 [WORKER] Sentinela de Infraestrutura Inicializado (Modo Hash Polling).");
-
-    // Loop puro de alta frequência (250ms) varrendo a Hash estática do motor
-    this.intervalId = setInterval(async () => {
-      await this.verificarEstadoMotor();
-    }, 250);
+    console.log("📡 [WORKER] Sentinela de Infraestrutura Inicializado (Modo Alerta/Crítico Orientado a Eventos).");
+    this.isListening = true;
+    this.escutarAlertas();
   }
 
-  async verificarEstadoMotor() {
-    try {
-      // Puxa a Hash estática com a foto atual de todos os sensores
-      const engineState = await redisConfig.client.hgetall(redisConfig.HASHES.ENGINE_STATE);
-      if (!engineState) return;
+  /**
+   * Ciclo de escuta bloqueante focado na Stream de Alertas.
+   * O Worker só acorda quando o Core identificar uma anomalia na tag.
+   */
+  async escutarAlertas() {
+    let lastId = '$';
 
-      // Varre cada sensor dentro da Hash (OIL_TEMP, CHT, RPM, etc.)
-      for (const [sensorName, rawPayload] of Object.entries(engineState)) {
-        try {
-          const payload = JSON.parse(rawPayload);
-          const valorAtual = payload.value !== undefined ? payload.value : payload.val;
+    while (this.isListening) {
+      try {
+        // Escuta bloqueante na stream de alertas do Core: 'kombi:stream:alerts'
+        const streamData = await redisConfig.client.xread(
+          'BLOCK', 5000, 
+          'STREAMS', 'kombi:stream:alerts', 
+          lastId
+        );
 
-          if (sensorName) {
-            // Envia direto e reto para o seu roteador processar sem intermediários
-            await sensorRouterController.rotear(sensorName, valorAtual, engineState);
+        if (!streamData) continue;
+
+        const [key, messages] = streamData[0];
+        
+        for (const [messageId, fields] of messages) {
+          lastId = messageId; 
+
+          const payloadIdx = fields.indexOf('payload');
+          if (payloadIdx !== -1) {
+            const alerta = JSON.parse(fields[payloadIdx + 1]);
+            const { sensor, severity, value } = alerta; // Ex: { sensor: 'OIL_TEMP', severity: 'CRITICAL', value: 130.2 }
+
+            if (sensor && (severity === 'ALERT' || severity === 'CRITICAL')) {
+              console.warn(`🚨 [WORKER_HEALTH] Alerta recebido via Core para ${sensor}. Severidade: ${severity}. Valor: ${value}`);
+              
+              // Aciona o controlador com a anomalia informada
+              await this.processarAlerta(sensor);
+            }
           }
-        } catch (parseErr) {
-          // Ignora payloads corrompidos ou chaves inválidas na Hash
-          continue;
+        }
+      } catch (err) {
+        if (this.isListening) {
+          console.error('❌ [WORKER_HEALTH] Erro na escuta da stream de alertas:', err.message);
+          await new Promise(resolve => setTimeout(resolve, 2000));
         }
       }
-    } catch (err) {
-      console.error('❌ [WORKER_HEALTH] Erro ao ler Hash kombi:engine:state:', err.message);
     }
   }
 
+  /**
+   * Pega o estado atualizado do sensor na HSET para repassar ao pipeline.
+   */
+  async processarAlerta(sensorName) {
+    try {
+      const engineState = await redisConfig.client.hgetall(redisConfig.HASHES.ENGINE_STATE);
+      if (!engineState || !engineState[sensorName]) return;
+
+      const payload = JSON.parse(engineState[sensorName]);
+      const valorAtual = payload.value !== undefined ? payload.value : payload.val;
+
+      // Chama o controller para processar o colapso/estouro de barreira
+      await sensorRouterController.rotear(sensorName, valorAtual, engineState);
+    } catch (err) {
+      console.error(`❌ [WORKER_HEALTH] Erro ao processar alerta do sensor ${sensorName}:`, err.message);
+    }
+  }
+
+  //Aqui ainda preciso que todo alerta seja registrado na stream de logs, para manter a linha do tempo completa
+
   stop() {
-    if (this.intervalId) clearInterval(this.intervalId);
-    console.log("🛑 [WORKER] Loops de infraestrutura parados.");
+    this.isListening = false;
+    console.log("🛑 [WORKER] Sentinela de infraestrutura pausado.");
   }
 }
 
