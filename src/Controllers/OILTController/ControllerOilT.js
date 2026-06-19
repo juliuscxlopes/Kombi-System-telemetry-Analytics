@@ -1,5 +1,5 @@
 // src/controllers/OILTController/ControllerOilT.js
-const oilTemperatureModel = require('../../models/Sensores/ENGINE/OIL/OilTemperatureModel');
+const oilTemperatureModel = require('../../models/SENSORS/ENGINE/OIL/OilTemperatureModel');
 
 class ControllerOilT {
   constructor() {

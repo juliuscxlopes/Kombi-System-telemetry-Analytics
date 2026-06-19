@@ -6,6 +6,7 @@ class WorkerHealth {
   constructor() {
     this.isListening = false;
     this.pollIntervalMs = 1000; // Roda a verificação a cada 1 segundo (ajustável)
+    this.ultimosAlertasNotificados = new Map(); // 🛑 Cache de supressão (Debounce de notificação)
   }
 
   start() {
@@ -24,8 +25,9 @@ class WorkerHealth {
         // Pega todos os alertas ativos no quadro unificado (HSET motor:alerts:state)
         const alertasAtivos = await redisConfig.client.hgetall(redisConfig.HASHES.ALERTS);
 
-        // Se o quadro estiver vazio, não há anomalias para combater, apenas aguarda o próximo ciclo
+        // Se o quadro estiver vazio, limpa o cache de supressão e aguarda
         if (!alertasAtivos || Object.keys(alertasAtivos).length === 0) {
+          this.ultimosAlertasNotificados.clear();
           await new Promise(resolve => setTimeout(resolve, this.pollIntervalMs));
           continue;
         }
@@ -33,9 +35,18 @@ class WorkerHealth {
         // Itera sobre cada sensor que está registrado como alerta/crítico no quadro
         for (const [sensorName, alertaString] of Object.entries(alertasAtivos)) {
           const alerta = JSON.parse(alertaString);
-          console.warn(`🚨 [WORKER_HEALTH] Combatendo anomalia | Sensor: ${alerta.sensor} | Status: ${alerta.status} | Ticket: ${alerta.ticket}`);
+          
+          // 🧠 Chave de identificação única do estado da anomalia no painel
+          const chaveEspectro = `${alerta.sensor}:${alerta.status}`;
 
-          // Aciona o controlador com a anomalia para garantir a atuação mínima
+          // 🛑 DEBOUNCE DE EXIBIÇÃO/LOG: Se o ticket do alerta for idêntico ao já notificado, suprime a repetição visual
+          if (this.ultimosAlertasNotificados.get(chaveEspectro) !== alerta.ticket) {
+            console.warn(`🚨 [WORKER_HEALTH] Combatendo anomalia | Sensor: ${alerta.sensor} | Status: ${alerta.status} | Ticket: ${alerta.ticket}`);
+            // Atualiza a memória com o ticket ativo para silenciar os próximos pulsos
+            this.ultimosAlertasNotificados.set(chaveEspectro, alerta.ticket);
+          }
+
+          // Aciona o controlador com a anomalia para garantir a atuação contínua e processamento
           await this.processarAlerta(sensorName);
         }
 
@@ -72,6 +83,7 @@ class WorkerHealth {
 
   stop() {
     this.isListening = false;
+    this.ultimosAlertasNotificados.clear();
     console.log("🛑 [WORKER] Sentinela de infraestrutura pausado.");
   }
 }
