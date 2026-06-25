@@ -1,10 +1,10 @@
 // src/models/SENSORS/THERMAL/OilTSensor.js
-const historyCollector = require('../HISTORY/HistoryCollector');
-const thermalEngineMath = require('../MATH/THERMAL/ThermalEngineMath');
-const TicketManager = require('../TICKET/TicketManager');
-const wsEmitter = require('../../Infra/websocket/WsEmitter');
-const publisherService = require('../../Infra/Redis/Publisher/PublisherService');
-const logger = require('../../log/logger');
+const historyCollector = require('../../HISTORY/HistoryCollector.js');
+const thermalEngineMath = require('../../MATH/THERMAL/ThermalEngineMath.js');
+const TicketManager = require('../../TICKET/TicketManager.js');
+const wsEmitter = require('../../../Infra/websocket/WsEmitter.js');
+const publisherService = require('../../../Infra/Redis/Publisher/PublisherService.js');
+const logger = require('../../../log/logger.js');
 
 const STREAM_ALERTS = 'stream:alerts';
 const STREAM_HEALTH = 'stream:health';

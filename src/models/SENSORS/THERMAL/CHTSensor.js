@@ -1,11 +1,10 @@
 // src/models/THERMAL/OilTSensor.js
-const historyCollector = require('../../models/HISTORY/HistoryCollector.JS');
-const thermalEngineMath = require('../../models/MATH/THERMAL/ThermalEngineMath');
-const oilTemperatureModel = require('../../models/SENSORS/ENGINE/OIL/OilTemperatureSensorModel');
-const wsEmitter = require('../../Infra/websocket/WsEmitter');
-const publisherService = require('../../Infra/Redis/Publisher/PublisherService');
-const logger = require('../../log/logger');
-
+const historyCollector = require('../../HISTORY/HistoryCollector.js');
+const thermalEngineMath = require('../../MATH/THERMAL/ThermalEngineMath.js');
+const TicketManager = require('../../TICKET/TicketManager.js');
+const wsEmitter = require('../../../Infra/websocket/WsEmitter.js');
+const publisherService = require('../../../Infra/Redis/Publisher/PublisherService.js');
+const logger = require('../../../log/logger.js');
 class CHTSensor {
   constructor() {
     this.sensorName = 'CHT_TEMP';
