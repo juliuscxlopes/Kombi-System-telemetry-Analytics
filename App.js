@@ -2,13 +2,15 @@
 require('dotenv').config();
 const healthWorker = require('./src/Infra/Redis/workers/WorkerHealth');
 const redis = require('./src/Infra/Redis/config/redisConfig');
+const wsConfig = require ('./src/Infra/websocket/WsConfig')
 
 async function bootstrap() {
   try {
     console.log("🧠 [SYSTEM] Iniciando Cérebro Analytics - Kombi System");
   
-    // Inicia o Worker (que já está com while(this.running))
-    healthWorker.start();
+    wsConfig.start((port) => {
+    logger.info(`🔌 [WS] WebSocket Server escutando na porta ${port}`);
+    });
 
     // Tratamento de interrupção
     process.on('SIGINT', async () => {

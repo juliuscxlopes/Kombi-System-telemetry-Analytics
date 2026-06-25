@@ -1,115 +1,197 @@
 // src/models/MATH/ThermalEngineMath.js
-const specThermalLimits = require('../../Specs/SpecThermalLimits'); // Contrato de limites físicos
+const engineSpecs = require('./engine_Specs.json');
+const metricsSpecs = require('./metrics_specs.json');
 
 class ThermalEngineMath {
   constructor() {
-    // Construtor puramente estático e desacoplado.
+    this.NAME = 'THERMAL_ENGINE_MATH';
+    this.janelas = ['30s', '1m', '3m', '5m'];
   }
 
-  /**
-   * MÉTODO PADRÃO DE ENTRADA (Contrato)
-   * @param {Array} historyPoints - Array com histórico de pontos estruturados: [{ value, ts }, ...]
-   * @param {Number} currentVal - Leitura atual do sensor.
-   * @param {String} sensorName - Nome do sensor térmico (ex: 'OIL_TEMP', 'CHT').
-   */
-  analisar(historyPoints, currentVal, sensorName = 'OIL_TEMP') {
-    // 1. Cálculo da Derivada Térmica (Taxa de subida por minuto)
-    const metricasDerivada = this._calcularDerivada(historyPoints, currentVal); 
-    
-    // 2. Projeção Preditiva (ETA Térmico)
-    const taxaSubida = metricasDerivada.taxaSubidaPerMinute;
-    
-    const projecoes = {
-      em1Minuto: parseFloat((currentVal + (taxaSubida * 1)).toFixed(1)),
-      em2Minutos: parseFloat((currentVal + (taxaSubida * 2)).toFixed(1)),
-      em5Minutos: parseFloat((currentVal + (taxaSubida * 5)).toFixed(1))
+  processar(ticket, sensorName, historicos) {
+    const resultado = {
+      ticket,
+      sensor: sensorName,
+      tsProcessamento: Date.now(),
+      janelas: {},
+      diagnostico: null
     };
 
-    // 3. Tempo Restante (ETA) para atingir os limites físicos da Spec (Genérico para qualquer sensor térmico)
-    const etaLimites = this._calcularTempoParaLimites(currentVal, taxaSubida, sensorName);
+    for (const janela of this.janelas) {
+      const historyPoints = historicos[janela];
+
+      if (!historyPoints || historyPoints.length < 2) {
+        resultado.janelas[janela] = { disponivel: false };
+        continue;
+      }
+
+      const valorAtual = historyPoints[historyPoints.length - 1].value;
+      const metricas = this._calcularMetricas(historyPoints, valorAtual, sensorName, janela);
+
+      resultado.janelas[janela] = metricas;
+
+      if (janela === '1m') {
+        resultado.diagnostico = this._classificar(sensorName, metricas);
+      }
+    }
+
+    return resultado;
+  }
+
+  // ── CÁLCULO DE MÉTRICAS POR JANELA ──────────────────────────
+
+  _calcularMetricas(historyPoints, valorAtual, sensorName, janela) {
+    const derivada = this._calcularDerivada(historyPoints, valorAtual);
+    const taxaSubida = derivada.taxaSubidaPerMinute;
+
+    const projecoes = {
+      em1Minuto:  parseFloat((valorAtual + taxaSubida * 1).toFixed(1)),
+      em2Minutos: parseFloat((valorAtual + taxaSubida * 2).toFixed(1)),
+      em5Minutos: parseFloat((valorAtual + taxaSubida * 5).toFixed(1))
+    };
+
+    const etaParaLimites = this._calcularETA(valorAtual, taxaSubida, sensorName);
 
     return {
       sensor: sensorName,
-      atual: currentVal,
-      deltaUltimoMinuto: metricasDerivada.delta,
+      janela,
+      atual: valorAtual,
+      deltaUltimoMinuto: derivada.delta,
       taxaSubidaPorMinuto: taxaSubida,
-      tendencia: metricasDerivada.tendencia,
+      tendencia: derivada.tendencia,
       projecao: projecoes,
-      etaParaLimites: etaLimites,
-      txtDelta: metricasDerivada.txtDelta
+      etaParaLimites,
+      txtDelta: derivada.txtDelta
     };
   }
 
-  /**
-   * 📉 Derivada Térmica (Taxa de Variação)
-   * Avalia a inércia térmica a partir dos pontos de histórico passados pelo Orquestrador.
-   */
-  _calcularDerivada(historyPoints, currentVal) {
-    // Contrato mínimo exigido: pelo menos 2 pontos para formar uma reta de variação
-    if (!historyPoints || historyPoints.length < 2) {
-      return {
-        delta: 0,
-        taxaSubidaPerMinute: 0,
-        tendencia: 'ESTAVEL',
-        txtDelta: 'Aguardando amostragem...'
-      };
-    }
+  // ── CLASSIFICAÇÃO PREDITIVA (só janela 1m) ───────────────────
 
-    const last = { value: currentVal, ts: Date.now() };
+  _classificar(sensorName, metricas) {
+  const spec = metricsSpecs.metrics_specs[sensorName];
+  if (!spec) return { severidade: 'TOLERAVEL', motivos: [], predictive: null };
+
+  const projecao1m  = metricas.projecao.em1Minuto;
+  const specFisica  = engineSpecs.specs[sensorName];
+  const predictSpec = spec.predictive;
+
+  // ── MÉTRICO (taxa, delta e projeção métrica) ──────────────
+  let severidade = 'TOLERAVEL';
+  const motivos = [];
+
+  const checar = (valor, limites, label) => {
+    if (valor >= limites.CRITICO) {
+      severidade = 'CRITICO';
+      motivos.push(`${label}: ${valor} ≥ ${limites.CRITICO} (CRITICO)`);
+    } else if (valor >= limites.ALERTA && severidade !== 'CRITICO') {
+      severidade = 'ALERTA';
+      motivos.push(`${label}: ${valor} ≥ ${limites.ALERTA} (ALERTA)`);
+    }
+  };
+
+  checar(metricas.taxaSubidaPorMinuto, spec.taxa_subida, 'taxa_subida');
+  checar(metricas.deltaUltimoMinuto,   spec.delta,       'delta');
+  checar(projecao1m,                   spec.projecao_1m, 'projecao_1m');
+
+  // ── PREDITIVO (projeção cruza threshold físico) ───────────
+  let predictive = null;
+
+  if (projecao1m >= specFisica.CRITICO_THRESHOLD) {
+    predictive = {
+      tipo: 'PREDICTIVE_2',
+      actuator: predictSpec.PREDICTIVE_2.actuator,
+      intensity: predictSpec.PREDICTIVE_2.intensity,
+      description: predictSpec.PREDICTIVE_2.description
+    };
+  } else if (projecao1m >= specFisica.ALERTA_THRESHOLD) {
+    predictive = {
+      tipo: 'PREDICTIVE_1',
+      actuator: predictSpec.PREDICTIVE_1.actuator,
+      intensity: predictSpec.PREDICTIVE_1.intensity,
+      description: predictSpec.PREDICTIVE_1.description
+    };
+  }
+
+  return {
+    severidade,
+    motivos,
+    predictive,
+    janela: '1m',
+    timestamp: Date.now()
+  };
+
+
+    // ── 2. MÉTRICO (taxa e delta fora do tolerável) ───────────────
+    let severidade = 'TOLERAVEL';
+    const motivos = [];
+
+    const checar = (valor, limites, label) => {
+      if (valor >= limites.CRITICO) {
+        severidade = 'CRITICO';
+        motivos.push(`${label}: ${valor} ≥ ${limites.CRITICO} (CRITICO)`);
+      } else if (valor >= limites.ALERTA && severidade !== 'CRITICO') {
+        severidade = 'ALERTA';
+        motivos.push(`${label}: ${valor} ≥ ${limites.ALERTA} (ALERTA)`);
+      }
+    };
+
+    checar(metricas.taxaSubidaPorMinuto, spec.taxa_subida, 'taxa_subida');
+    checar(metricas.deltaUltimoMinuto,   spec.delta,       'delta');
+
+    return {
+      severidade,  // 'TOLERAVEL' | 'ALERTA' | 'CRITICO'
+      motivos,
+      predictive: null,
+      janela: '1m',
+      timestamp: Date.now()
+    };
+  }
+
+  // ── DERIVADA ─────────────────────────────────────────────────
+
+  _calcularDerivada(historyPoints, currentVal) {
+    const last  = { value: currentVal, ts: Date.now() };
     const first = historyPoints[0];
 
     const deltaTempoMinutos = (last.ts - first.ts) / 60000;
-    // Evita divisão por zero caso ocorram no mesmo milissegundo; assume intervalo mínimo de ~1s
-    const divisorTempo = deltaTempoMinutos > 0 ? deltaTempoMinutos : 0.016; 
+    const divisor = deltaTempoMinutos > 0 ? deltaTempoMinutos : 0.016;
 
     const deltaValue = last.value - first.value;
-    const taxaSubidaPorMinuto = deltaValue / divisorTempo;
+    const taxaSubidaPorMinuto = deltaValue / divisor;
 
     let tendencia = 'ESTAVEL';
-    if (taxaSubidaPorMinuto > 2.0) tendencia = 'SUBINDO_RAPIDO';
-    else if (taxaSubidaPorMinuto > 0.5) tendencia = 'SUBINDO';
+    if (taxaSubidaPorMinuto > 2.0)       tendencia = 'SUBINDO_RAPIDO';
+    else if (taxaSubidaPorMinuto > 0.5)  tendencia = 'SUBINDO';
     else if (taxaSubidaPorMinuto < -0.5) tendencia = 'DESCENDO';
 
-    const sinalDelta = deltaValue > 0 ? '+' : '';
-    const txtDeltaFormatado = `${sinalDelta}${deltaValue.toFixed(1)}°C em ${parseFloat(divisorTempo.toFixed(1))} min`;
+    const sinal = deltaValue > 0 ? '+' : '';
 
     return {
       delta: parseFloat(deltaValue.toFixed(1)),
       taxaSubidaPerMinute: parseFloat(taxaSubidaPorMinuto.toFixed(2)),
       tendencia,
-      txtDelta: txtDeltaFormatado
+      txtDelta: `${sinal}${deltaValue.toFixed(1)}°C em ${divisor.toFixed(1)} min`
     };
   }
 
-  /**
-   * ⏱️ Calcula o tempo (minutos) para atingir os limites físicos (Alerta/Crítico)
-   * Obtendo os limiares dinamicamente da Spec dependendo do `sensorName` ('OIL_TEMP', 'CHT', etc.).
-   */
-  _calcularTempoParaLimites(currentVal, taxaSubida, sensorName) {
-    // Busca os limites dinâmicos na spec (Ex: Pega os ranges de ALERTA e CRITICO)
-    const limitesSensor = specThermalLimits.obterLimites ? specThermalLimits.obterLimites(sensorName) : null;
+  // ── ETA PARA LIMITES FÍSICOS ─────────────────────────────────
 
-    // Fallback de segurança caso a Spec não encontre o sensor ou não esteja implementada ainda
-    const thresholdAlerta = limitesSensor?.ALERTA || 95.0;
-    const thresholdCritico = limitesSensor?.CRITICO || 100.0;
-
-    // Se a temperatura estiver estável ou caindo, o ETA para estourar o limite é nulo/infinito
-    if (taxaSubida <= 0) {
-      return {
-        alertaMinutos: null,
-        criticoMinutos: null,
-        mensagem: 'Parâmetros térmicos controlados ou em resfriamento.'
-      };
+  _calcularETA(currentVal, taxaSubida, sensorName) {
+    const spec = engineSpecs.specs[sensorName];
+    if (!spec || taxaSubida <= 0) {
+      return { alertaMinutos: null, criticoMinutos: null, mensagem: 'Estável ou resfriando.' };
     }
 
-    // Cálculo do tempo restante (Minutos = Distância para o limite / Taxa de subida por minuto)
-    const minutosParaAlerta = (thresholdAlerta - currentVal) / taxaSubida;
-    const minutosParaCritico = (thresholdCritico - currentVal) / taxaSubida;
+    const minutosParaAlerta  = (spec.ALERTA_THRESHOLD  - currentVal) / taxaSubida;
+    const minutosParaCritico = (spec.CRITICO_THRESHOLD - currentVal) / taxaSubida;
 
     return {
-      alertaMinutos: minutosParaAlerta > 0 ? parseFloat(minutosParaAlerta.toFixed(2)) : 0,
+      alertaMinutos:  minutosParaAlerta  > 0 ? parseFloat(minutosParaAlerta.toFixed(2))  : 0,
       criticoMinutos: minutosParaCritico > 0 ? parseFloat(minutosParaCritico.toFixed(2)) : 0,
-      limiteAlvo: { alerta: thresholdAlerta, critico: thresholdCritico }
+      limiteAlvo: {
+        alerta:  spec.ALERTA_THRESHOLD,
+        critico: spec.CRITICO_THRESHOLD
+      }
     };
   }
 }

@@ -1,0 +1,34 @@
+{
+  "version": "1.0.0",
+  "updated_at": "2026-06-25",
+
+  "cross_thermal_rules": [
+    {
+      "id": "ERR_OVERHEAT_STRUCTURAL",
+      "description": "Saturação térmica simultânea OIL_TEMP + CHT — Risco de dano estrutural ao motor.",
+      "gatilho": {
+        "OIL_TEMP": "ALERTA",
+        "CHT": "ALERTA"
+      },
+      "agravantes": [
+        { "sensor": "RPM",          "operator": ">=", "value": 2500, "peso": 1 },
+        { "sensor": "OIL_PRESSURE", "operator": "<",  "value": 1.0,  "peso": 2 }
+      ],
+      "peso_para_escalar": 2,
+      "PREDICTIVE_1": {
+        "eta_minutos": 5,
+        "tag": "PRE_DAMAGE_WARNING",
+        "description": "Convergência térmica detectada. Reduza carga e monitore.",
+        "actuators": ["FAN_OIL", "FAN_CHT"],
+        "intensity": "50%"
+      },
+      "PREDICTIVE_2": {
+        "eta_minutos": 1,
+        "tag": "PRE_DAMAGE_CRITICAL",
+        "description": "Dano iminente. Reduza rotação imediatamente ou desligue o motor.",
+        "actuators": ["FAN_OIL", "FAN_CHT"],
+        "intensity": "100%"
+      }
+    }
+  ]
+}

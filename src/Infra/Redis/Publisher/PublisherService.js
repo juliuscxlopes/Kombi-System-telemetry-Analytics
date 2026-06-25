@@ -1,80 +1,62 @@
-// src/Infra/Redis/Publisher/PublisherService.js
-const redisConfig = require('../config/redisConfig'); // Seu client Redis configurado
+const redisConfig = require('../config/redisConfig');
 
 class PublisherService {
   constructor() {
-    // Centraliza o mapeamento exato das suas 3 streams principais
-    // Usando redisConfig.STREAMS conforme definido no seu redisConfig.js
-    this.STREAMS = {
-      HEALTH: redisConfig.STREAMS?.HEALTH || 'stream:health',
-      ACTUATOR: redisConfig.STREAMS?.ACTUATOR || 'stream:actuators',
-      LOG: redisConfig.STREAMS?.LOG || 'stream:logs:actuators'
-    };
+    // Pega o mapeamento centralizado de streams do redisConfig
+    this.streams = redisConfig.STREAMS;
   }
 
   /**
-   * 🏥 1. Canal de Saúde e Diagnóstico do Sensor (Foco em Telemetria e Spec)
-   * @param {string} sensor - Nome do sensor (ex: 'OIL_TEMP')
-   * @param {object} metrics - Objeto contendo os calculos/tendencias
-   * @param {object} diagnosis - Veredito vindo da Spec
+   * 🚀 MÉTODO PRINCIPAL: Publicação genérica Fire-and-Forget usando XADD
+   * Desacoplado de regras de negócio, publica qualquer payload na stream especificada.
+   * * @param {string} streamName - Nome da stream (Ex: redisConfig.STREAMS.DIAGNOSIS)
+   * @param {Object|Array} payloadData - Dados estruturados do evento
+   * @param {Object} options - Metadados adicionais para rastreabilidade (Opcional)
    */
-  health(sensor, metrics, diagnosis) {
-    const payload = {
-      sensor,
-      status: 'Analise',
-      metrics,
-      diagnosis,
-      ts: Date.now().toString()
-    };
+  publish(streamName, payloadData, options = {}) {
+    try {
+      // Garante que o streamName passado existe no nosso Single Source of Truth
+      const targetStream = Object.values(this.streams).includes(streamName) 
+        ? streamName 
+        : this.streams.LOG; // Fallback seguro para LOG se a stream for desconhecida
 
-    this._fireAndForget(this.STREAMS.HEALTH, payload);
+      // Agrega o payload base com eventuais opções de rastreamento/metadados
+      const envelope = {
+        ...payloadData,
+        _meta: {
+          published_at: new Date().toISOString(),
+          ...options
+        }
+      };
+
+      // Utiliza o XADD do ioredis de forma assíncrona, fire-and-forget, sem travar o event loop
+      redisConfig.client.xadd(targetStream, '*', 'payload', JSON.stringify(envelope))
+        .catch(err => console.error(`❌ [PUBLISHER-SERVICE] Falha ao publicar na stream ${targetStream}:`, err.message));
+
+    } catch (err) {
+      console.error(`❌ [PUBLISHER-SERVICE] Erro crítico no envelope do publisher:`, err.message);
+    }
   }
 
   /**
-   * ⚡ 2. Canal de Comando Bruto de Hardware (Foco no Core físico)
-   * @param {string} atuador - Nome do atuador (ex: 'FAN_OIL')
-   * @param {string} status - Estado de transição ('Active', 'Starting', 'Ligado')
-   * @param {string} value - Potência do PWM ou acionamento (ex: '25%')
-   * @param {string} plan - Nome do plano ativo (ex: 'OILTdecreasePlan')
+   * 💡 MÉTODOS AUXILIARES (Opcionais / Mantidos para retrocompatibilidade sem quebrar nada)
+   * Apenas encapsulam a chamada do publish principal apontando para as chaves centrais.
    */
-  actuator(atuador, status, value, plan) {
-    const payload = {
-      atuador,
-      status,
-      value,
-      plan,
-      ts: Date.now().toString()
-    };
-
-    this._fireAndForget(this.STREAMS.ACTUATOR, payload);
+  health(streamName, payload, options = {}) {
+    this.publish(streamName, payload, options);
   }
 
-  /**
-   * 📜 3. Canal de Linha do Tempo e Histórico Humano
-   * @param {string} atuador - Nome do atuador dono do evento
-   * @param {string} evento - Descrição legível do que aconteceu
-   * @param {string} estagioAtual - Estágio de potência no momento
-   * @param {string} plan - Plano associado
-   */
-  log(atuador, evento, estagioAtual, plan) {
-    const payload = {
-      atuador,
-      evento,
-      estagio_atual: estagioAtual,
-      plan,
-      ts: Date.now().toString()
-    };
-
-    this._fireAndForget(this.STREAMS.LOG, payload);
+  actuator(payload, options = {}) {
+    this.publish(this.streams.CONTAINMENT, payload, options);
   }
 
-  /**
-   * 🚀 Método privado Fire-and-Forget usando XADD para não bloquear o Kernel
-   */
-  _fireAndForget(streamName, payload) {
-    // Aponta para redisConfig.client para acessar a instância do ioredis e o método xadd
-    redisConfig.client.xadd(streamName, '*', 'payload', JSON.stringify(payload))
-      .catch(err => console.error(`❌ [PUBLISHER-SERVICE] Erro assíncrono na stream ${streamName}:`, err.message));
+  log(eventoDescricao, estagioAtual = 'nominal', options = {}) {
+    const logPayload = {
+      event: eventoDescricao,
+      status: estagioAtual,
+      ts: Date.now()
+    };
+    this.publish(this.streams.LOG, logPayload, options);
   }
 }
 

@@ -1,8 +1,7 @@
-// Arquivo: src/Infra/Redis/config/redisConfig.js
 const Redis = require('ioredis');
 require('dotenv').config();
 
-class redisConfig {
+class RedisConfig {
   constructor() {
     this.client = new Redis({
       host: process.env.REDIS_HOST || 'redis-msg-center',
@@ -12,16 +11,17 @@ class redisConfig {
       retryStrategy: (times) => Math.min(times * 50, 2000), // Reconexão agressiva para ambiente embarcado
     });
     
-    // 🎯 Chaves únicas, namespaces e centralizadas do StreamRules.js (Single Source of Truth)
+    // 🎯 Chaves únicas, namespaces e centralizadas (Single Source of Truth)
     this.STREAMS = {
-      LOG: 'barramento:stream:log',      // Linha do tempo central (Append-Only / XADD)
-      HEALTH: 'barramento:stream:health'  // Health Check Reativo
+      LOG: 'barramento:stream:log',                    // Linha do tempo central (Append-Only / XADD)
+      HEALTH: 'barramento:stream:health',              // 
+      
     };
 
     this.HASHES = {
-      ENGINE_STATE: 'motor:engine:state',      // Foto instantânea e atualizada dos sensores
-      ACTUATORS_STATE: 'motor:actuators:state', // Estado atual dos atuadores físicos
-      ALERTS: 'motor:alerts:state'             // Quadro de Alertas Ativos (tracking de contenção)
+      ENGINE_STATE: 'motor:engine:state',              // Foto instantânea e atualizada dos sensores
+      ACTUATORS_STATE: 'motor:actuators:state',        // Estado atual dos atuadores físicos
+      ALERTS: 'motor:alerts:state',                    // Quadro de Alertas Ativos (tracking de contenção)
     };
 
     this._initEvents();
@@ -33,4 +33,4 @@ class redisConfig {
   }
 }
 
-module.exports = new redisConfig();
+module.exports = new RedisConfig();

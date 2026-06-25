@@ -1,0 +1,26 @@
+{
+  "version": "1.0.0",
+  "engine_type": "VW_1600_ORIGINAL",
+  "updated_at": "2026-06-17",
+  "engineSpecs": {
+    "CHT": {
+      "unit": "°C",
+      "description": "Temperatura de Cabeçote (Padrão Original)",
+      "FRIO_MAX": 80.0,
+      "NOMINAL_MIN": 100.0,
+      "NOMINAL_MAX": 130.0,
+      "ALERTA_THRESHOLD": 131.0,
+      "CRITICO_THRESHOLD": 150.0
+    },
+    "OIL_TEMP": {
+      "unit": "°C",
+      "description": "Temperatura do Óleo (Mineral Estrutural)",
+      "FRIO_MAX": 70.0,
+      "NOMINAL_MIN": 78.0,
+      "NOMINAL_MAX": 85.0,
+      "ALERTA_THRESHOLD": 88.0,
+      "CRITICO_THRESHOLD": 92.0
+    }
+
+    }
+}
