@@ -1,19 +1,17 @@
-//src/infra/websocket/WsEmitter.js
-const wsEmitter = require('../WsEmitter');
+// src/Infra/websocket/WsEmitter.js
+const WebSocket = require('ws');
+const wsConfig = require('./WsConfig');
 
-class ActuatorEmitter {
+class WsEmitter {
+  broadcast(tag, data) {
+    const payload = JSON.stringify({ [tag]: data });
 
-  dispatch(predictive) {
-    if (!predictive) return;
-
-    wsEmitter.broadcast(predictive.actuator, {
-      intensity: predictive.intensity,
-      tipo: predictive.tipo,
-      description: predictive.description,
-      timestamp: Date.now()
+    wsConfig.wss.clients.forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(payload);
+      }
     });
   }
-
 }
 
-module.exports = new ActuatorEmitter();
+module.exports = new WsEmitter();
