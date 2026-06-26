@@ -21,7 +21,8 @@
     "pg": "^8.19.0",
     "redis": "^5.11.0",
     "serialport": "^13.0.0",
-    "winston": "^3.19.0"
+    "winston": "^3.19.0",
+    "ws": "^8.21.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.14"
