@@ -14,7 +14,7 @@ async function bootstrap() {
       logger.info(`🔌 [WS] WebSocket Server escutando na porta ${port}`);
     });
 
-     wsListener.start();
+     WsListener.start();
 
     process.on('SIGINT', async () => {
       logger.info("🛑 [SYSTEM] Parando Analytics...");
