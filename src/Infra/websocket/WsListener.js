@@ -1,7 +1,7 @@
 // src/Infra/Ws/WsListener.js
 const WebSocket = require('ws');
 const sensorRouterController = require('../../Controllers/SensorRouterController');
-const logger = require('../../utils/log/logger');
+const logger = require('../../log/logger');
 
 const WS_CORE_URL = process.env.WS_CORE_URL || 'ws://telemetry-core:3000';
 
