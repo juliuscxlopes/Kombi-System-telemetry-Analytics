@@ -14,8 +14,7 @@ async function bootstrap() {
       logger.info(`🔌 [WS] WebSocket Server escutando na porta ${port}`);
     });
 
-    const wsListener = new WsListener(wsConfig.wss);  // <-- não existe ainda, mas deixa pronto
-    // wsListener.start(); // descomenta quando tiver o WsListener do analytics
+     wsListener.start();
 
     process.on('SIGINT', async () => {
       logger.info("🛑 [SYSTEM] Parando Analytics...");
