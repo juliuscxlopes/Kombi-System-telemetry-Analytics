@@ -5,10 +5,14 @@ services:
     restart: always
     networks:
       - kombi-network
+    ports:
+      - "3001:3001"
     environment:
       - REDIS_HOST=redis-msg-center
       - REDIS_PORT=6379
       - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - WS_CORE_URL=ws://telemetry-core:3000
+      - WS_PORT=3001
     deploy:
       resources:
         limits:

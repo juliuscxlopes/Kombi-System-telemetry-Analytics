@@ -1,27 +1,30 @@
-// src/App.js
+// App.js
 require('dotenv').config();
-const healthWorker = require('./src/Infra/Redis/workers/WorkerHealth');
+const WsConfig = require('./src/Infra/websocket/WsConfig');
+const WsListener = require('./src/Infra/websocket/WsListener');
 const redis = require('./src/Infra/Redis/config/redisConfig');
-const wsConfig = require ('./src/Infra/websocket/WsConfig')
+const logger = require('./src/log/logger');
 
 async function bootstrap() {
   try {
-    console.log("🧠 [SYSTEM] Iniciando Cérebro Analytics - Kombi System");
-  
+    logger.info("🧠 [SYSTEM] Iniciando Cérebro Analytics - Kombi System");
+
+    const wsConfig = new WsConfig(process.env.WS_PORT || 3001);
     wsConfig.start((port) => {
-    logger.info(`🔌 [WS] WebSocket Server escutando na porta ${port}`);
+      logger.info(`🔌 [WS] WebSocket Server escutando na porta ${port}`);
     });
 
-    // Tratamento de interrupção
+    const wsListener = new WsListener(wsConfig.wss);  // <-- não existe ainda, mas deixa pronto
+    // wsListener.start(); // descomenta quando tiver o WsListener do analytics
+
     process.on('SIGINT', async () => {
-      console.log("\n🛑 [SYSTEM] Parando Analytics...");
-      healthWorker.stop(); // Muda o running para false
+      logger.info("🛑 [SYSTEM] Parando Analytics...");
       await redis.client.quit();
       process.exit(0);
     });
 
   } catch (err) {
-    console.error("❌ [FATAL] Erro:", err);
+    logger.error(`❌ [FATAL] Erro: ${err}`);
     process.exit(1);
   }
 }
