@@ -1,5 +1,5 @@
 // src/models/TICKET/TicketManager.js
-const redisConfig = require('../../../Infra/Redis/config/redisConfig');
+const redisConfig = require('../../Infra/Redis/config/redisConfig');
 const logger = require('../../log/logger');
 
 const STREAM_ALERTS = 'stream:alerts';
