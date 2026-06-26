@@ -68,60 +68,13 @@ class ThermalEngineMath {
   // ── CLASSIFICAÇÃO PREDITIVA (só janela 1m) ───────────────────
 
   _classificar(sensorName, metricas) {
-  const spec = metricsSpecs.metrics_specs[sensorName];
-  if (!spec) return { severidade: 'TOLERAVEL', motivos: [], predictive: null };
+    const spec = metricsSpecs.metrics_specs[sensorName];
+    if (!spec) return { severidade: 'TOLERAVEL', motivos: [], predictive: null };
 
-  const projecao1m  = metricas.projecao.em1Minuto;
-  const specFisica  = engineSpecs.specs[sensorName];
-  const predictSpec = spec.predictive;
+    const projecao1m  = metricas.projecao.em1Minuto;
+    const specFisica  = engineSpecs.specs[sensorName];
+    const predictSpec = spec.predictive;
 
-  // ── MÉTRICO (taxa, delta e projeção métrica) ──────────────
-  let severidade = 'TOLERAVEL';
-  const motivos = [];
-
-  const checar = (valor, limites, label) => {
-    if (valor >= limites.CRITICO) {
-      severidade = 'CRITICO';
-      motivos.push(`${label}: ${valor} ≥ ${limites.CRITICO} (CRITICO)`);
-    } else if (valor >= limites.ALERTA && severidade !== 'CRITICO') {
-      severidade = 'ALERTA';
-      motivos.push(`${label}: ${valor} ≥ ${limites.ALERTA} (ALERTA)`);
-    }
-  };
-
-  checar(metricas.taxaSubidaPorMinuto, spec.taxa_subida, 'taxa_subida');
-  checar(metricas.deltaUltimoMinuto,   spec.delta,       'delta');
-  checar(projecao1m,                   spec.projecao_1m, 'projecao_1m');
-
-  // ── PREDITIVO (projeção cruza threshold físico) ───────────
-  let predictive = null;
-
-  if (projecao1m >= specFisica.CRITICO_THRESHOLD) {
-    predictive = {
-      tipo: 'PREDICTIVE_2',
-      actuator: predictSpec.PREDICTIVE_2.actuator,
-      intensity: predictSpec.PREDICTIVE_2.intensity,
-      description: predictSpec.PREDICTIVE_2.description
-    };
-  } else if (projecao1m >= specFisica.ALERTA_THRESHOLD) {
-    predictive = {
-      tipo: 'PREDICTIVE_1',
-      actuator: predictSpec.PREDICTIVE_1.actuator,
-      intensity: predictSpec.PREDICTIVE_1.intensity,
-      description: predictSpec.PREDICTIVE_1.description
-    };
-  }
-
-  return {
-    severidade,
-    motivos,
-    predictive,
-    janela: '1m',
-    timestamp: Date.now()
-  };
-
-
-    // ── 2. MÉTRICO (taxa e delta fora do tolerável) ───────────────
     let severidade = 'TOLERAVEL';
     const motivos = [];
 
@@ -137,11 +90,30 @@ class ThermalEngineMath {
 
     checar(metricas.taxaSubidaPorMinuto, spec.taxa_subida, 'taxa_subida');
     checar(metricas.deltaUltimoMinuto,   spec.delta,       'delta');
+    checar(projecao1m,                   spec.projecao_1m, 'projecao_1m');
+
+    let predictive = null;
+
+    if (projecao1m >= specFisica.CRITICO_THRESHOLD) {
+      predictive = {
+        tipo: 'PREDICTIVE_2',
+        actuator: predictSpec.PREDICTIVE_2.actuator,
+        intensity: predictSpec.PREDICTIVE_2.intensity,
+        description: predictSpec.PREDICTIVE_2.description
+      };
+    } else if (projecao1m >= specFisica.ALERTA_THRESHOLD) {
+      predictive = {
+        tipo: 'PREDICTIVE_1',
+        actuator: predictSpec.PREDICTIVE_1.actuator,
+        intensity: predictSpec.PREDICTIVE_1.intensity,
+        description: predictSpec.PREDICTIVE_1.description
+      };
+    }
 
     return {
-      severidade,  // 'TOLERAVEL' | 'ALERTA' | 'CRITICO'
+      severidade,
       motivos,
-      predictive: null,
+      predictive,
       janela: '1m',
       timestamp: Date.now()
     };
