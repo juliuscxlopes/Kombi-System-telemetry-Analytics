@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "engine_type": "VW_1600_ORIGINAL",
   "updated_at": "2026-06-17",
-  "engineSpecs": {
+  "specs": {
     "CHT": {
       "unit": "°C",
       "description": "Temperatura de Cabeçote (Padrão Original)",
