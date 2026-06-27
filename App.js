@@ -15,8 +15,6 @@ async function bootstrap() {
     wsConfig.start((port) => {
       logger.info(`🔌 [WS] WebSocket Server escutando na porta ${port}`);
     });
-
-    // Cliente WS — conecta no core pra receber alertas
     WsListener.start();
 
     process.on('SIGINT', async () => {
