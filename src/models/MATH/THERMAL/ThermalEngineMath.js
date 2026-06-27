@@ -1,6 +1,7 @@
 // src/models/MATH/ThermalEngineMath.js
 const engineSpecs = require('./engine_Specs.json');
 const metricsSpecs = require('./metrics_specs.json');
+const logger = require('../../log/logger');
 
 class ThermalEngineMath {
   constructor() {
@@ -9,6 +10,8 @@ class ThermalEngineMath {
   }
 
   processar(sensorName, historicos) {
+    logger.debug(`🧮 [MATH] Iniciando processamento | Sensor: ${sensorName}`);
+
     const resultado = {
       sensor: sensorName,
       tsProcessamento: Date.now(),
@@ -21,20 +24,22 @@ class ThermalEngineMath {
 
       if (!historyPoints || historyPoints.length < 2) {
         resultado.janelas[janela] = { disponivel: false };
+        logger.debug(`⏭️  [MATH:${sensorName}] Janela ${janela} — insuficiente (${historyPoints?.length ?? 0} pontos)`);
         continue;
       }
 
       const valorAtual = historyPoints[historyPoints.length - 1].value;
       const metricas = this._calcularMetricas(historyPoints, valorAtual, sensorName, janela);
-
       resultado.janelas[janela] = metricas;
+
+      logger.debug(`📊 [MATH:${sensorName}] Janela ${janela} | Atual: ${valorAtual}°C | Taxa: ${metricas.taxaSubidaPorMinuto}°C/min | Tendência: ${metricas.tendencia} | Projeção 1m: ${metricas.projecao.em1Minuto}°C | ETA Alerta: ${metricas.etaParaLimites.alertaMinutos ?? 'N/A'}min | ETA Crítico: ${metricas.etaParaLimites.criticoMinutos ?? 'N/A'}min`);
 
       if (janela === '1m') {
         resultado.diagnostico = this._classificar(sensorName, metricas);
+        logger.info(`🩺 [MATH:${sensorName}] Diagnóstico 1m | Severidade: ${resultado.diagnostico.severidade} | Motivos: ${resultado.diagnostico.motivos.join(' | ') || 'nenhum'} | Predictive: ${resultado.diagnostico.predictive?.tipo ?? 'null'}`);
       }
     }
 
-    // Garante que nunca retorna null
     if (!resultado.diagnostico) {
       resultado.diagnostico = {
         severidade: 'TOLERAVEL',
@@ -43,12 +48,11 @@ class ThermalEngineMath {
         janela: '1m',
         timestamp: Date.now()
       };
+      logger.debug(`🟢 [MATH:${sensorName}] Diagnóstico padrão — sem janela 1m disponível.`);
     }
 
     return resultado;
   }
-
-  // ── CÁLCULO DE MÉTRICAS POR JANELA ──────────────────────────
 
   _calcularMetricas(historyPoints, valorAtual, sensorName, janela) {
     const derivada = this._calcularDerivada(historyPoints, valorAtual);
@@ -75,11 +79,12 @@ class ThermalEngineMath {
     };
   }
 
-  // ── CLASSIFICAÇÃO PREDITIVA (só janela 1m) ───────────────────
-
   _classificar(sensorName, metricas) {
     const spec = metricsSpecs.metrics_specs[sensorName];
-    if (!spec) return { severidade: 'TOLERAVEL', motivos: [], predictive: null };
+    if (!spec) {
+      logger.warn(`⚠️  [MATH:${sensorName}] Spec métrica não encontrada — retornando TOLERAVEL.`);
+      return { severidade: 'TOLERAVEL', motivos: [], predictive: null };
+    }
 
     const projecao1m  = metricas.projecao.em1Minuto;
     const specFisica  = engineSpecs.specs[sensorName];
@@ -111,6 +116,7 @@ class ThermalEngineMath {
         intensity: predictSpec.PREDICTIVE_2.intensity,
         description: predictSpec.PREDICTIVE_2.description
       };
+      logger.warn(`⚡ [MATH:${sensorName}] PREDICTIVE_2 — projeção ${projecao1m}°C ≥ CRITICO ${specFisica.CRITICO_THRESHOLD}°C`);
     } else if (projecao1m >= specFisica.ALERTA_THRESHOLD) {
       predictive = {
         tipo: 'PREDICTIVE_1',
@@ -118,6 +124,7 @@ class ThermalEngineMath {
         intensity: predictSpec.PREDICTIVE_1.intensity,
         description: predictSpec.PREDICTIVE_1.description
       };
+      logger.warn(`⚡ [MATH:${sensorName}] PREDICTIVE_1 — projeção ${projecao1m}°C ≥ ALERTA ${specFisica.ALERTA_THRESHOLD}°C`);
     }
 
     return {
@@ -128,8 +135,6 @@ class ThermalEngineMath {
       timestamp: Date.now()
     };
   }
-
-  // ── DERIVADA ─────────────────────────────────────────────────
 
   _calcularDerivada(historyPoints, currentVal) {
     const last  = { value: currentVal, ts: Date.now() };
@@ -155,8 +160,6 @@ class ThermalEngineMath {
       txtDelta: `${sinal}${deltaValue.toFixed(1)}°C em ${divisor.toFixed(1)} min`
     };
   }
-
-  // ── ETA PARA LIMITES FÍSICOS ─────────────────────────────────
 
   _calcularETA(currentVal, taxaSubida, sensorName) {
     const spec = engineSpecs.specs[sensorName];
