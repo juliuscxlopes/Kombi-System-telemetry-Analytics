@@ -2,8 +2,6 @@
 const redisConfig = require('../../Infra/Redis/config/redisConfig');
 const logger = require('../../log/logger');
 
-const STREAM_ALERTS = 'stream:alerts';
-
 class TicketManager {
   constructor(sensorName) {
     this.sensorName = sensorName;
@@ -11,19 +9,20 @@ class TicketManager {
 
   async buscarTicketAtivo() {
     try {
-      const entries = await redisConfig.client.xrevrange(STREAM_ALERTS, '+', '-', 'COUNT', 50);
-
-      for (const [id, fields] of entries) {
-        logger.debug(`[TICKET_MANAGER] RAW fields[0]: ${fields[0]} | fields[1]: ${fields[1]}`);
-        const data = JSON.parse(fields[1]);
-        logger.debug(`[TICKET_MANAGER] Entry: ${JSON.stringify(fields)}`);
-        if (data.sensor === this.sensorName && data.lifecycle === 'ABERTO') {
-          logger.debug(`🔍 [TICKET_MANAGER:${this.sensorName}] Ticket ativo encontrado: ${data.ticket}`);
-          return data;
-        }
+      const raw = await redisConfig.client.hget(redisConfig.HASHES.ALERTS, this.sensorName);
+      if (!raw) {
+        logger.debug(`🔍 [TICKET_MANAGER:${this.sensorName}] Nenhum ticket ativo encontrado.`);
+        return null;
       }
 
-      logger.debug(`🔍 [TICKET_MANAGER:${this.sensorName}] Nenhum ticket ativo encontrado.`);
+      const data = JSON.parse(raw);
+
+      if (data.lifecycle === 'ABERTO') {
+        logger.debug(`🔍 [TICKET_MANAGER:${this.sensorName}] Ticket ativo encontrado: ${data.ticket}`);
+        return data;
+      }
+
+      logger.debug(`🔍 [TICKET_MANAGER:${this.sensorName}] Ticket existe mas lifecycle: ${data.lifecycle}`);
       return null;
 
     } catch (err) {
@@ -47,13 +46,15 @@ class TicketManager {
         if (ticketAtivo) {
           const agora = Date.now();
           const duracaoMs = agora - ticketAtivo.aberturaTs;
-          logger.info(`✅ [TICKET_MANAGER:${this.sensorName}] Fechando ticket ${ticketAtivo.ticket} | Duração: ${Math.round(duracaoMs / 1000)}s`);
-          return this._montarPayload(ticketAtivo.ticket, 'OPERACIONAL', 'FECHADO', diagnosticResult, {
+          const payload = this._montarPayload(ticketAtivo.ticket, 'OPERACIONAL', 'FECHADO', diagnosticResult, {
             aberturaTs: ticketAtivo.aberturaTs,
             fechamentoTs: agora,
             duracaoMs,
             duracaoSeg: Math.round(duracaoMs / 1000)
           });
+          await redisConfig.client.hdel(redisConfig.HASHES.ALERTS, this.sensorName);
+          logger.info(`✅ [TICKET_MANAGER:${this.sensorName}] Ticket FECHADO ${ticketAtivo.ticket} | Duração: ${Math.round(duracaoMs / 1000)}s`);
+          return payload;
         }
         logger.debug(`⏭️  [TICKET_MANAGER:${this.sensorName}] NOOP — sensor operacional sem ticket ativo.`);
         return { lifecycle: 'NOOP', ticket: null };
@@ -62,10 +63,12 @@ class TicketManager {
       // ── SEM TICKET: abre novo ──────────────────────────────
       if (!ticketAtivo) {
         const novoTicket = this._gerarTicket();
-        logger.warn(`🆕 [TICKET_MANAGER:${this.sensorName}] Abrindo ticket ${novoTicket} | Status: ${statusAtual}`);
-        return this._montarPayload(novoTicket, statusAtual, 'ABERTO', diagnosticResult, {
+        const payload = this._montarPayload(novoTicket, statusAtual, 'ABERTO', diagnosticResult, {
           aberturaTs: Date.now()
         });
+        await redisConfig.client.hset(redisConfig.HASHES.ALERTS, this.sensorName, JSON.stringify(payload));
+        logger.warn(`🆕 [TICKET_MANAGER:${this.sensorName}] Ticket ABERTO ${novoTicket} | Status: ${statusAtual}`);
+        return payload;
       }
 
       // ── TICKET ATIVO: verifica transições ──────────────────
@@ -75,19 +78,23 @@ class TicketManager {
       }
 
       if (ticketAtivo.status === 'ALERTA' && statusAtual === 'CRITICO') {
-        logger.warn(`📈 [TICKET_MANAGER:${this.sensorName}] ESCALONADO | ${ticketAtivo.ticket} | ALERTA → CRITICO`);
-        return this._montarPayload(ticketAtivo.ticket, 'CRITICO', 'ESCALONADO', diagnosticResult, {
+        const payload = this._montarPayload(ticketAtivo.ticket, 'CRITICO', 'ESCALONADO', diagnosticResult, {
           aberturaTs: ticketAtivo.aberturaTs,
           escalonamentoTs: Date.now()
         });
+        await redisConfig.client.hset(redisConfig.HASHES.ALERTS, this.sensorName, JSON.stringify(payload));
+        logger.warn(`📈 [TICKET_MANAGER:${this.sensorName}] Ticket ESCALONADO ${ticketAtivo.ticket} | ALERTA → CRITICO`);
+        return payload;
       }
 
       if (ticketAtivo.status === 'CRITICO' && statusAtual === 'ALERTA') {
-        logger.info(`📉 [TICKET_MANAGER:${this.sensorName}] REBAIXADO | ${ticketAtivo.ticket} | CRITICO → ALERTA`);
-        return this._montarPayload(ticketAtivo.ticket, 'ALERTA', 'REBAIXADO', diagnosticResult, {
+        const payload = this._montarPayload(ticketAtivo.ticket, 'ALERTA', 'REBAIXADO', diagnosticResult, {
           aberturaTs: ticketAtivo.aberturaTs,
           rebaixamentoTs: Date.now()
         });
+        await redisConfig.client.hset(redisConfig.HASHES.ALERTS, this.sensorName, JSON.stringify(payload));
+        logger.info(`📉 [TICKET_MANAGER:${this.sensorName}] Ticket REBAIXADO ${ticketAtivo.ticket} | CRITICO → ALERTA`);
+        return payload;
       }
 
     } catch (err) {

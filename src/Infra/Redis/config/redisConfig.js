@@ -14,14 +14,13 @@ class RedisConfig {
     // 🎯 Chaves únicas, namespaces e centralizadas (Single Source of Truth)
     this.STREAMS = {
       LOG: 'barramento:stream:log',                    // Linha do tempo central (Append-Only / XADD)
-      HEALTH: 'barramento:stream:health',              // 
       
     };
 
     this.HASHES = {
       ENGINE_STATE: 'motor:engine:state',              // Foto instantânea e atualizada dos sensores
       ACTUATORS_STATE: 'motor:actuators:state',        // Estado atual dos atuadores físicos
-      ALERTS: 'motor:alerts:state',                    // Quadro de Alertas Ativos (tracking de contenção)
+      ALERTS: 'motor:alerts:state',                   // Quadro de Alertas Ativos (tracking de contenção)                           
     };
 
     this._initEvents();
