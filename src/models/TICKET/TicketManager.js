@@ -15,6 +15,7 @@ class TicketManager {
 
       for (const [id, fields] of entries) {
         const data = JSON.parse(fields[1]);
+        logger.debug(`[TICKET_MANAGER] Entry: ${JSON.stringify(fields)}`);
         if (data.sensor === this.sensorName && data.lifecycle === 'ABERTO') {
           logger.debug(`🔍 [TICKET_MANAGER:${this.sensorName}] Ticket ativo encontrado: ${data.ticket}`);
           return data;
