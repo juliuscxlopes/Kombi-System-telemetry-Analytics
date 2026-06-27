@@ -4,6 +4,8 @@ const WsConfig = require('./src/Infra/websocket/WsConfig');
 const WsListener = require('./src/Infra/websocket/WsListener');
 const redis = require('./src/Infra/Redis/config/redisConfig');
 const logger = require('./src/log/logger');
+const metricsLooper = require('./src/services/MetricsLooper');
+
 
 async function bootstrap() {
   try {
@@ -16,6 +18,7 @@ async function bootstrap() {
       logger.info(`🔌 [WS] WebSocket Server escutando na porta ${port}`);
     });
     WsListener.start();
+    metricsLooper.start();
 
     process.on('SIGINT', async () => {
       logger.info("🛑 [SYSTEM] Parando Analytics...");

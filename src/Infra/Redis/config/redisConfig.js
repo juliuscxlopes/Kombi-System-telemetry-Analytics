@@ -20,7 +20,8 @@ class RedisConfig {
     this.HASHES = {
       ENGINE_STATE: 'motor:engine:state',              // Foto instantânea e atualizada dos sensores
       ACTUATORS_STATE: 'motor:actuators:state',        // Estado atual dos atuadores físicos
-      ALERTS: 'motor:alerts:state',                   // Quadro de Alertas Ativos (tracking de contenção)                           
+      ALERTS: 'motor:alerts:state', 
+      METRICS: 'motor:metrics:state'                  // Quadro de Alertas Ativos (tracking de contenção)                           
     };
 
     this._initEvents();

@@ -7,7 +7,6 @@ const publisherService = require('../../../Infra/Redis/Publisher/PublisherServic
 const logger = require('../../../log/logger.js');
 
 const STREAM_ALERTS = 'stream:alerts';
-const STREAM_HEALTH = 'stream:health';
 
 class OILTSensor {
   constructor() {
@@ -59,14 +58,17 @@ class OILTSensor {
       }
 
       // 6. STREAM:HEALTH + BROADCAST FRONTEND
-      const payloadHealth = {
-        ticket: ticketPayload.ticket,
-        sensor: this.sensorName,
-        lifecycle: ticketPayload.lifecycle,
-        timestamp: Date.now(),
-        janelas: resultado.janelas,
-        diagnostico
-      };
+      await redisConfig.client.hset(
+        redisConfig.HASHES.METRICS,
+        this.sensorName,
+        JSON.stringify({
+          sensor: this.sensorName,
+          ticket: ticketPayload.ticket,
+          lifecycle: ticketPayload.lifecycle,
+          timestamp: Date.now(),
+          diagnostico
+        })
+      );
 
       await publisherService.health(STREAM_HEALTH, payloadHealth, {});
       wsEmitter.broadcast('health', payloadHealth);
