@@ -1,7 +1,7 @@
 // src/models/MATH/ThermalEngineMath.js
 const engineSpecs = require('./engine_Specs.json');
 const metricsSpecs = require('./metrics_specs.json');
-const logger = require('../../log/logger');
+const logger = require('../../../log/logger');
 
 class ThermalEngineMath {
   constructor() {
