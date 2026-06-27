@@ -35,7 +35,7 @@ class WsListener {
         const sensorName = Object.keys(data)[0];
         const payload = data[sensorName];
 
-        logger.info(`🚨 [WS_LISTENER] Alerta recebido | Sensor: ${sensorName} | Status: ${payload.status}`);
+        //logger.info(`🚨 [WS_LISTENER] Alerta recebido | Sensor: ${sensorName} | Status: ${payload.status}`);
 
         await sensorRouterController.rotear(sensorName, payload.value, payload);
 

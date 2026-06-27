@@ -10,7 +10,7 @@ class ThermalEngineMath {
   }
 
   processar(sensorName, historicos) {
-    logger.debug(`🧮 [MATH] Iniciando processamento | Sensor: ${sensorName}`);
+    //logger.debug(`🧮 [MATH] Iniciando processamento | Sensor: ${sensorName}`);
 
     const resultado = {
       sensor: sensorName,
@@ -32,7 +32,7 @@ class ThermalEngineMath {
       const metricas = this._calcularMetricas(historyPoints, valorAtual, sensorName, janela);
       resultado.janelas[janela] = metricas;
 
-      logger.debug(`📊 [MATH:${sensorName}] Janela ${janela} | Atual: ${valorAtual}°C | Taxa: ${metricas.taxaSubidaPorMinuto}°C/min | Tendência: ${metricas.tendencia} | Projeção 1m: ${metricas.projecao.em1Minuto}°C | ETA Alerta: ${metricas.etaParaLimites.alertaMinutos ?? 'N/A'}min | ETA Crítico: ${metricas.etaParaLimites.criticoMinutos ?? 'N/A'}min`);
+      //logger.debug(`📊 [MATH:${sensorName}] Janela ${janela} | Atual: ${valorAtual}°C | Taxa: ${metricas.taxaSubidaPorMinuto}°C/min | Tendência: ${metricas.tendencia} | Projeção 1m: ${metricas.projecao.em1Minuto}°C | ETA Alerta: ${metricas.etaParaLimites.alertaMinutos ?? 'N/A'}min | ETA Crítico: ${metricas.etaParaLimites.criticoMinutos ?? 'N/A'}min`);
 
       if (janela === '1m') {
         resultado.diagnostico = this._classificar(sensorName, metricas);
@@ -116,7 +116,7 @@ class ThermalEngineMath {
         intensity: predictSpec.PREDICTIVE_2.intensity,
         description: predictSpec.PREDICTIVE_2.description
       };
-      logger.warn(`⚡ [MATH:${sensorName}] PREDICTIVE_2 — projeção ${projecao1m}°C ≥ CRITICO ${specFisica.CRITICO_THRESHOLD}°C`);
+      //logger.warn(`⚡ [MATH:${sensorName}] PREDICTIVE_2 — projeção ${projecao1m}°C ≥ CRITICO ${specFisica.CRITICO_THRESHOLD}°C`);
     } else if (projecao1m >= specFisica.ALERTA_THRESHOLD) {
       predictive = {
         tipo: 'PREDICTIVE_1',
@@ -124,7 +124,7 @@ class ThermalEngineMath {
         intensity: predictSpec.PREDICTIVE_1.intensity,
         description: predictSpec.PREDICTIVE_1.description
       };
-      logger.warn(`⚡ [MATH:${sensorName}] PREDICTIVE_1 — projeção ${projecao1m}°C ≥ ALERTA ${specFisica.ALERTA_THRESHOLD}°C`);
+      //logger.warn(`⚡ [MATH:${sensorName}] PREDICTIVE_1 — projeção ${projecao1m}°C ≥ ALERTA ${specFisica.ALERTA_THRESHOLD}°C`);
     }
 
     return {

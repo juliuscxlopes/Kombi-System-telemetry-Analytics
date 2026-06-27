@@ -26,23 +26,23 @@ class CHTSensor {
         }
         const estado = JSON.parse(raw);
         value = estado.value;
-        logger.debug(`🔄 [CHT_SENSOR] Valor buscado do engine state: ${value}`);
+        //logger.debug(`🔄 [CHT_SENSOR] Valor buscado do engine state: ${value}`);
       }
 
-      logger.info(`🔵 [CHT_SENSOR] Iniciando pipeline | value: ${value} | origem: ${origem ?? 'WS'}`);
+      //logger.info(`🔵 [CHT_SENSOR] Iniciando pipeline | value: ${value} | origem: ${origem ?? 'WS'}`);
 
       // 1. HISTÓRICOS
       const historicos = await historyCollector.coletar(this.sensorName);
-      logger.debug(`📚 [CHT_SENSOR] Históricos coletados | 30s: ${historicos['30s']?.length ?? 0} | 1m: ${historicos['1m']?.length ?? 0} | 3m: ${historicos['3m']?.length ?? 0} | 5m: ${historicos['5m']?.length ?? 0}`);
+      //logger.debug(`📚 [CHT_SENSOR] Históricos coletados | 30s: ${historicos['30s']?.length ?? 0} | 1m: ${historicos['1m']?.length ?? 0} | 3m: ${historicos['3m']?.length ?? 0} | 5m: ${historicos['5m']?.length ?? 0}`);
 
       // 2. MATH
       const resultado = thermalEngineMath.processar(this.sensorName, historicos);
       const diagnostico = resultado.diagnostico;
-      logger.debug(`🧮 [CHT_SENSOR] Math concluído | Severidade: ${diagnostico?.severidade} | Predictive: ${diagnostico?.predictive?.tipo ?? 'null'} | Janelas disponíveis: ${Object.keys(resultado.janelas).filter(j => resultado.janelas[j].disponivel !== false).join(', ')}`);
+      //logger.debug(`🧮 [CHT_SENSOR] Math concluído | Severidade: ${diagnostico?.severidade} | Predictive: ${diagnostico?.predictive?.tipo ?? 'null'} | Janelas disponíveis: ${Object.keys(resultado.janelas).filter(j => resultado.janelas[j].disponivel !== false).join(', ')}`);
 
       // 3. TICKET MANAGER
       const ticketPayload = await this.ticketManager.processar(diagnostico.severidade, diagnostico);
-      logger.debug(`🎫 [CHT_SENSOR] Ticket | Lifecycle: ${ticketPayload.lifecycle} | Ticket: ${ticketPayload.ticket ?? 'null'}`);
+      //logger.debug(`🎫 [CHT_SENSOR] Ticket | Lifecycle: ${ticketPayload.lifecycle} | Ticket: ${ticketPayload.ticket ?? 'null'}`);
 
       // Atualiza estado interno
       this.ultimoDiagnostico = resultado;
@@ -65,7 +65,7 @@ class CHTSensor {
 
       // DEBOUNCED ou NOOP — encerra após atualizar metrics
       if (ticketPayload.lifecycle === 'DEBOUNCED' || ticketPayload.lifecycle === 'NOOP') {
-        logger.debug(`⏭️  [CHT_SENSOR] ${ticketPayload.lifecycle} — pipeline encerrado.`);
+        //logger.debug(`⏭️  [CHT_SENSOR] ${ticketPayload.lifecycle} — pipeline encerrado.`);
         return;
       }
 
