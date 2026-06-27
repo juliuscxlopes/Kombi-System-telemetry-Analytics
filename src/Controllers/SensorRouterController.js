@@ -12,7 +12,7 @@ class SensorRouterController {
           await OILTSensor.processar(value, rawGlobalState);
           break;
 
-        case 'CHT':
+        case 'CHT_TEMP':
           await CHTSensor.processar(value, rawGlobalState);
           break;
 

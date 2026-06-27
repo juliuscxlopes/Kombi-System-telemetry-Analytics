@@ -11,7 +11,7 @@ const STREAM_HEALTH = 'stream:health';
 
 class CHTSensor {
   constructor() {
-    this.sensorName = 'CHT';
+    this.sensorName = 'CHT_TEMP';
     this.ticketManager = new TicketManager(this.sensorName);
     this.ticketAtivo = null;
     this.ultimoDiagnostico = null;
