@@ -1,12 +1,10 @@
 // src/models/SENSORS/THERMAL/OilTSensor.js
+const redisConfig = require('../../../Infra/Redis/config/redisConfig');
 const historyCollector = require('../../HISTORY/HistoryCollector.js');
 const thermalEngineMath = require('../../MATH/THERMAL/ThermalEngineMath.js');
 const TicketManager = require('../../TICKET/TicketManager.js');
 const wsEmitter = require('../../../Infra/websocket/WsEmitter.js');
-const publisherService = require('../../../Infra/Redis/Publisher/PublisherService.js');
 const logger = require('../../../log/logger.js');
-
-const STREAM_ALERTS = 'stream:alerts';
 
 class OILTSensor {
   constructor() {
@@ -16,9 +14,22 @@ class OILTSensor {
     this.ultimoDiagnostico = null;
   }
 
-  async processar(value, rawGlobalState) {
+  async processar(value, origem) {
     try {
-      logger.info(`🔵 [OILT_SENSOR] Iniciando pipeline | value: ${value}`);
+
+      // Se não veio valor — busca o atual no engine state
+      if (value === null || value === undefined) {
+        const raw = await redisConfig.client.hget(redisConfig.HASHES.ENGINE_STATE, this.sensorName);
+        if (!raw) {
+          logger.warn(`⚠️  [OILT_SENSOR] Sem valor no engine state — abortando pipeline.`);
+          return;
+        }
+        const estado = JSON.parse(raw);
+        value = estado.value;
+        logger.debug(`🔄 [OILT_SENSOR] Valor buscado do engine state: ${value}`);
+      }
+
+      logger.info(`🔵 [OILT_SENSOR] Iniciando pipeline | value: ${value} | origem: ${origem ?? 'WS'}`);
 
       // 1. HISTÓRICOS
       const historicos = await historyCollector.coletar(this.sensorName);
@@ -40,15 +51,23 @@ class OILTSensor {
         this.ticketAtivo = ticketPayload;
       }
 
-      // DEBOUNCED ou NOOP — nada a fazer
+      // 4. ATUALIZA METRICS — sempre, independente do lifecycle
+      await redisConfig.client.hset(
+        redisConfig.HASHES.METRICS,
+        this.sensorName,
+        JSON.stringify({
+          sensor: this.sensorName,
+          origem: origem ?? 'WS',
+          timestamp: Date.now(),
+          diagnostico
+        })
+      );
+
+      // DEBOUNCED ou NOOP — encerra após atualizar metrics
       if (ticketPayload.lifecycle === 'DEBOUNCED' || ticketPayload.lifecycle === 'NOOP') {
         logger.debug(`⏭️  [OILT_SENSOR] ${ticketPayload.lifecycle} — pipeline encerrado.`);
         return;
       }
-
-      // 4. STREAM:ALERTS
-      await publisherService.health(STREAM_ALERTS, ticketPayload, {});
-      logger.info(`🚨 [OILT_SENSOR] Publicado em stream:alerts | Lifecycle: ${ticketPayload.lifecycle}`);
 
       // 5. ATUADOR PREDITIVO
       if (diagnostico.predictive) {
@@ -57,23 +76,20 @@ class OILTSensor {
         logger.info(`⚡ [OILT_SENSOR] Preditivo disparado | ${actuator} → ${intensity}`);
       }
 
-      // 6. STREAM:HEALTH + BROADCAST FRONTEND
-      await redisConfig.client.hset(
-        redisConfig.HASHES.METRICS,
-        this.sensorName,
-        JSON.stringify({
-          sensor: this.sensorName,
-          ticket: ticketPayload.ticket,
-          lifecycle: ticketPayload.lifecycle,
-          timestamp: Date.now(),
-          diagnostico
-        })
-      );
+      // 6. BROADCAST FRONTEND
+      const payloadHealth = {
+        ticket: ticketPayload.ticket,
+        sensor: this.sensorName,
+        origem: origem ?? 'WS',
+        lifecycle: ticketPayload.lifecycle,
+        timestamp: Date.now(),
+        janelas: resultado.janelas,
+        diagnostico
+      };
 
-      await publisherService.health(STREAM_HEALTH, payloadHealth, {});
       wsEmitter.broadcast('health', payloadHealth);
 
-      logger.info(`📡 [OILT_SENSOR] Pipeline concluído | Ticket: ${ticketPayload.ticket} | Severidade: ${diagnostico.severidade} | Lifecycle: ${ticketPayload.lifecycle}`);
+      logger.info(`📡 [OILT_SENSOR] Pipeline concluído | Ticket: ${ticketPayload.ticket} | Severidade: ${diagnostico.severidade} | Lifecycle: ${ticketPayload.lifecycle} | Origem: ${origem ?? 'WS'}`);
 
     } catch (err) {
       logger.error(`❌ [OILT_SENSOR] Falha no pipeline: ${err.message}`);

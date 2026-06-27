@@ -4,8 +4,8 @@ const OILTSensor = require('../models/SENSORS/THERMAL/OilTSensor');
 const CHTSensor = require('../models/SENSORS/THERMAL/CHTSensor');
 const logger = require('../log/logger');
 
-const ANALISE_INTERVALO_MS = 10000; // 10s
-const LOOP_INTERVALO_MS = 5000;     // 5s
+const ANALISE_INTERVALO_MS = 10000;
+const LOOP_INTERVALO_MS = 5000;
 
 const SENSORES = {
   OIL_TEMP: OILTSensor,
@@ -33,19 +33,28 @@ class MetricsLooper {
   async _verificarSensores() {
     for (const [sensorName, sensor] of Object.entries(SENSORES)) {
       try {
+
+        // Se já tem ticket ativo — sensor já está sendo analisado continuamente
+        const ticketAtivo = await redisConfig.client.hget(redisConfig.HASHES.ALERTS, sensorName);
+        if (ticketAtivo) {
+          logger.debug(`👁️  [METRICS_LOOPER] ${sensorName} com ticket ativo — análise contínua via WS. Looper em standby.`);
+          continue;
+        }
+
+        // Sem ticket — verifica se precisa de análise preditiva
         const ultimaAnalise = await this._buscarUltimaAnalise(sensorName);
         const agora = Date.now();
 
         if (!ultimaAnalise) {
           logger.info(`👁️  [METRICS_LOOPER] ${sensorName} sem análise — solicitando imediatamente.`);
-          await sensor.processar(null, {});
+          await sensor.processar(null, 'PredictiveAnalyzer');
           continue;
         }
 
         const idadeMs = agora - ultimaAnalise.timestamp;
         if (idadeMs > ANALISE_INTERVALO_MS) {
           logger.info(`👁️  [METRICS_LOOPER] ${sensorName} análise antiga (${Math.round(idadeMs / 1000)}s) — solicitando nova.`);
-          await sensor.processar(null, {});
+          await sensor.processar(null, 'PredictiveAnalyzer');
         } else {
           logger.debug(`👁️  [METRICS_LOOPER] ${sensorName} análise recente (${Math.round(idadeMs / 1000)}s) — ok.`);
         }
