@@ -9,15 +9,19 @@ async function bootstrap() {
   try {
     logger.info("🧠 [SYSTEM] Iniciando Cérebro Analytics - Kombi System");
 
+    // Servidor WS do analytics (recebe frontend e envia broadcasts)
     const wsConfig = new WsConfig(process.env.WS_PORT || 3001);
+    global.wsConfig = wsConfig;
     wsConfig.start((port) => {
       logger.info(`🔌 [WS] WebSocket Server escutando na porta ${port}`);
     });
 
-     WsListener.start();
+    // Cliente WS — conecta no core pra receber alertas
+    WsListener.start();
 
     process.on('SIGINT', async () => {
       logger.info("🛑 [SYSTEM] Parando Analytics...");
+      WsListener.stop();
       await redis.client.quit();
       process.exit(0);
     });
