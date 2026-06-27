@@ -8,9 +8,8 @@ class ThermalEngineMath {
     this.janelas = ['30s', '1m', '3m', '5m'];
   }
 
-  processar(ticket, sensorName, historicos) {
+  processar(sensorName, historicos) {
     const resultado = {
-      ticket,
       sensor: sensorName,
       tsProcessamento: Date.now(),
       janelas: {},
@@ -33,6 +32,17 @@ class ThermalEngineMath {
       if (janela === '1m') {
         resultado.diagnostico = this._classificar(sensorName, metricas);
       }
+    }
+
+    // Garante que nunca retorna null
+    if (!resultado.diagnostico) {
+      resultado.diagnostico = {
+        severidade: 'TOLERAVEL',
+        motivos: [],
+        predictive: null,
+        janela: '1m',
+        timestamp: Date.now()
+      };
     }
 
     return resultado;

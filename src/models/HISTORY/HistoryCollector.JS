@@ -1,57 +1,54 @@
 // src/models/HISTORY/HistoryCollector.js
 const redisConfig = require('../../Infra/Redis/config/redisConfig');
-const publisherService = require('../../Infra/Redis/Publisher/PublisherService');
+const logger = require('../../log/logger');
 
 class HistoryCollector {
   constructor() {
-    this.streamLogKey = 'barramento:stream:log'; 
-    // Janelas em milissegundos
+    this.streamLogKey = 'barramento:stream:log';
     this.janelas = {
       '30s': 30 * 1000,
-      '1m': 60 * 1000,
+      '1m':  60 * 1000,
       '3m': 180 * 1000,
       '5m': 300 * 1000
     };
   }
 
-  async processarEExportarHistorico(ticket, sensorName) {
+  /**
+   * Coleta e retorna histórico particionado por janela.
+   * @param {String} sensorName
+   * @returns {{ '30s': [], '1m': [], '3m': [], '5m': [] }}
+   */
+  async coletar(sensorName) {
     try {
       const agora = Date.now();
-      // Pega a maior janela para cobrir todas as análises (5 minutos)
       const tempoAtrasMax = agora - this.janelas['5m'];
 
-      // Busca os registros da janela máxima na stream central
-      const registrosStream = await redisConfig.client.xrange(this.streamLogKey, tempoAtrasMax, agora);
+      const registrosStream = await redisConfig.client.xrange(
+        this.streamLogKey,
+        tempoAtrasMax,
+        agora
+      );
 
       if (!registrosStream || registrosStream.length === 0) {
-        console.warn(`⚠️ [HISTORY_COLLECTOR] Nenhum dado encontrado para o sensor ${sensorName}`);
-        return;
+        logger.warn(`⚠️ [HISTORY_COLLECTOR] Nenhum dado encontrado para ${sensorName}`);
+        return { '30s': [], '1m': [], '3m': [], '5m': [] };
       }
 
-      // Converte os dados brutos da stream para o formato de pontos
       const allPoints = this._parseRegistros(registrosStream, sensorName);
+      logger.debug(`📚 [HISTORY_COLLECTOR] ${sensorName} | Total de pontos: ${allPoints.length}`);
 
-      // Filtra e publica o histórico para cada janela solicitada
+      // Particiona por janela e retorna
+      const historicos = {};
       for (const [nomeJanela, ms] of Object.entries(this.janelas)) {
         const limiteTempo = agora - ms;
-        const pointsWindow = allPoints.filter(p => p.ts >= limiteTempo);
-
-        const payloadStream = {
-          ticket,
-          sensor: sensorName,
-          window: nomeJanela,
-          timestamp: agora,
-          data: pointsWindow
-        };
-
-        // Publica na stream específica de histórico/métricas // AQUI PRECISAMOS DE PUBLICAR NA STREAM HESTORY
-        publisherService.health(`stream:history:${nomeJanela.toLowerCase()}`, payloadStream, {});//ajuste strem propria
+        historicos[nomeJanela] = allPoints.filter(p => p.ts >= limiteTempo);
       }
 
-      console.info(`📊 [HISTORY_COLLECTOR] Histórico particionado e publicado para o Ticket: ${ticket}`);
-      
+      return historicos;
+
     } catch (err) {
-      console.error(`❌ [HISTORY_COLLECTOR] Erro ao coletar e exportar histórico:`, err.message);
+      logger.error(`❌ [HISTORY_COLLECTOR] Erro ao coletar histórico de ${sensorName}: ${err.message}`);
+      return { '30s': [], '1m': [], '3m': [], '5m': [] };
     }
   }
 
@@ -59,22 +56,16 @@ class HistoryCollector {
     const points = [];
     for (const [messageId, fields] of registrosStream) {
       const sensorIdx = fields.indexOf('sensor');
-      const dataIdx = fields.indexOf('data');
+      const dataIdx   = fields.indexOf('data');
 
       if (sensorIdx !== -1 && dataIdx !== -1) {
-        const sName = fields[sensorIdx + 1];
-        
-        if (sName === sensorName) {
+        if (fields[sensorIdx + 1] === sensorName) {
           try {
             const payload = JSON.parse(fields[dataIdx + 1]);
             const ts = payload.ts || parseInt(messageId.split('-')[0], 10);
-            
-            points.push({
-              value: payload.value,
-              ts: parseInt(ts, 10)
-            });
+            points.push({ value: payload.value, ts: parseInt(ts, 10) });
           } catch (e) {
-            // Silencioso ou log individual para não quebrar o loop
+            // silencioso
           }
         }
       }
