@@ -8,7 +8,7 @@ class SensorRouterController {
   async rotear(sensorName, value, rawGlobalState) {
     try {
       switch (sensorName) {
-        case 'OIL_T':
+        case 'OIL_TEMP':
           await OILTSensor.processar(value, rawGlobalState);
           break;
 
