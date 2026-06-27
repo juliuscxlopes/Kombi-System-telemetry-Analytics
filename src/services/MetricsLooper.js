@@ -15,11 +15,14 @@ const SENSORES = {
 class MetricsLooper {
   constructor() {
     this.isRunning = false;
+    this.startTs = null;
+    this.warmupMs = 60000; // 1min de warmup
   }
 
   start() {
     this.isRunning = true;
-    logger.info('👁️  [METRICS_LOOPER] Watchdog iniciado — monitorando OIL_TEMP e CHT.');
+    this.startTs = Date.now();
+    logger.info('👁️  [METRICS_LOOPER] Watchdog iniciado — aguardando 1min de warmup.');
     this._loop();
   }
 
@@ -31,6 +34,11 @@ class MetricsLooper {
   }
 
   async _verificarSensores() {
+    // Aguarda warmup antes da primeira análise
+    if (Date.now() - this.startTs < this.warmupMs) {
+      logger.debug(`👁️  [METRICS_LOOPER] Warmup em andamento — ${Math.round((Date.now() - this.startTs) / 1000)}s / 60s`);
+      return;
+    }
     for (const [sensorName, sensor] of Object.entries(SENSORES)) {
       try {
 

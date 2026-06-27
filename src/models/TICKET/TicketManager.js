@@ -62,6 +62,13 @@ class TicketManager {
 
       // ── SEM TICKET: abre novo ──────────────────────────────
       if (!ticketAtivo) {
+        // Não abre ticket se sensor ainda está FRIO
+        const statusFisico = await this._buscarStatusFisico();
+        if (statusFisico === 'FRIO' || statusFisico === 'OFF') {
+          logger.debug(`🧊 [TICKET_MANAGER:${this.sensorName}] Sensor em ${statusFisico} — ticket bloqueado.`);
+          return { lifecycle: 'NOOP', ticket: null };
+        }
+
         const novoTicket = this._gerarTicket();
         const payload = this._montarPayload(novoTicket, statusAtual, 'ABERTO', diagnosticResult, {
           aberturaTs: Date.now()
@@ -115,6 +122,18 @@ class TicketManager {
       ...timestamps,
       timestamp: Date.now()
     };
+  }
+
+  async _buscarStatusFisico() {
+    try {
+      const raw = await redisConfig.client.hget(redisConfig.HASHES.ENGINE_STATE, this.sensorName);
+      if (!raw) return null;
+      const estado = JSON.parse(raw);
+      return estado.status;
+    } catch (err) {
+      logger.error(`❌ [TICKET_MANAGER:${this.sensorName}] Falha ao buscar status físico: ${err.message}`);
+      return null;
+    }
   }
 }
 
