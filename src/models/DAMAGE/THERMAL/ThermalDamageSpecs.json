@@ -1,18 +1,22 @@
 {
-  "version": "1.0.0",
-  "updated_at": "2026-06-25",
+  "version": "2.0.0",
+  "updated_at": "2026-06-27",
+  "engine": "VW_1600_ALCOOL",
 
   "cross_thermal_rules": [
+
     {
       "id": "ERR_OVERHEAT_STRUCTURAL",
-      "description": "Saturação térmica simultânea OIL_TEMP + CHT — Risco de dano estrutural ao motor.",
+      "grau": 4,
+      "description": "Saturação térmica simultânea OIL_TEMP + CHT — Risco de dano estrutural ao bloco.",
       "gatilho": {
         "OIL_TEMP": "ALERTA",
         "CHT": "ALERTA"
       },
       "agravantes": [
         { "sensor": "RPM",          "operator": ">=", "value": 2500, "peso": 1 },
-        { "sensor": "OIL_PRESSURE", "operator": "<",  "value": 1.0,  "peso": 2 }
+        { "sensor": "OIL_PRESSURE", "operator": "<",  "value": 1.0,  "peso": 2 },
+        { "sensor": "VACUUM",       "operator": "<=", "value": 150,  "peso": 1 }
       ],
       "peso_para_escalar": 2,
       "PREDICTIVE_1": {
@@ -25,10 +29,130 @@
       "PREDICTIVE_2": {
         "eta_minutos": 1,
         "tag": "PRE_DAMAGE_CRITICAL",
-        "description": "Dano iminente. Reduza rotação imediatamente ou desligue o motor.",
+        "description": "Dano estrutural iminente. Reduza rotação imediatamente ou desligue.",
+        "actuators": ["FAN_OIL", "FAN_CHT"],
+        "intensity": "100%"
+      }
+    },
+
+    {
+      "id": "ERR_OIL_COLLAPSE",
+      "grau": 5,
+      "description": "Colapso de lubrificação — Pressão de óleo crítica com temperatura elevada. Risco de gripagem imediata.",
+      "gatilho": {
+        "OIL_PRESSURE": "ALERTA",
+        "OIL_TEMP": "ALERTA"
+      },
+      "agravantes": [
+        { "sensor": "RPM",    "operator": ">=", "value": 2500, "peso": 2 },
+        { "sensor": "OIL_PRESSURE", "operator": "<", "value": 0.4, "peso": 3 }
+      ],
+      "peso_para_escalar": 2,
+      "PREDICTIVE_1": {
+        "eta_minutos": 3,
+        "tag": "PRE_DAMAGE_WARNING",
+        "description": "Pressão de óleo caindo com motor quente. Reduza rotação imediatamente.",
+        "actuators": ["FAN_OIL"],
+        "intensity": "75%"
+      },
+      "PREDICTIVE_2": {
+        "eta_minutos": 1,
+        "tag": "PRE_DAMAGE_CRITICAL",
+        "description": "Colapso de óleo iminente — Gripagem em segundos. DESLIGUE O MOTOR.",
+        "actuators": ["FAN_OIL"],
+        "intensity": "100%"
+      }
+    },
+
+    {
+      "id": "ERR_PRE_IGNITION",
+      "grau": 5,
+      "description": "Risco de pré-ignição — Mistura pobre com cabeçote quente e rotação alta. Pode fundir pistão.",
+      "gatilho": {
+        "LAMBDA": "ALERTA",
+        "CHT": "ALERTA"
+      },
+      "agravantes": [
+        { "sensor": "RPM",    "operator": ">=", "value": 3000, "peso": 2 },
+        { "sensor": "LAMBDA", "operator": ">=", "value": 1.05, "peso": 3 },
+        { "sensor": "CHT",    "operator": ">=", "value": 100,  "peso": 2 }
+      ],
+      "peso_para_escalar": 3,
+      "PREDICTIVE_1": {
+        "eta_minutos": 3,
+        "tag": "PRE_DAMAGE_WARNING",
+        "description": "Mistura pobre com cabeçote quente. Verifique carburador e reduza carga.",
+        "actuators": ["FAN_CHT"],
+        "intensity": "75%"
+      },
+      "PREDICTIVE_2": {
+        "eta_minutos": 1,
+        "tag": "PRE_DAMAGE_CRITICAL",
+        "description": "Pré-ignição iminente — Risco de fundir pistão. REDUZA RPM e DESLIGUE.",
+        "actuators": ["FAN_CHT"],
+        "intensity": "100%"
+      }
+    },
+
+    {
+      "id": "ERR_DETONATION_STRUCTURAL",
+      "grau": 5,
+      "description": "Risco de detonação — CHT crítico + RPM alto + mistura pobre. Canaleta em risco.",
+      "gatilho": {
+        "CHT": "CRITICO",
+        "RPM": "ALERTA"
+      },
+      "agravantes": [
+        { "sensor": "LAMBDA",       "operator": ">=", "value": 1.02, "peso": 3 },
+        { "sensor": "OIL_PRESSURE", "operator": "<",  "value": 0.8,  "peso": 2 },
+        { "sensor": "VACUUM",       "operator": "<=", "value": 80,   "peso": 1 }
+      ],
+      "peso_para_escalar": 2,
+      "PREDICTIVE_1": {
+        "eta_minutos": 2,
+        "tag": "PRE_DAMAGE_WARNING",
+        "description": "Condições de detonação detectadas. Reduza RPM e enriqueça mistura.",
+        "actuators": ["FAN_CHT", "FAN_OIL"],
+        "intensity": "100%"
+      },
+      "PREDICTIVE_2": {
+        "eta_minutos": 0,
+        "tag": "PRE_DAMAGE_CRITICAL",
+        "description": "DETONAÇÃO ATIVA — Desligue o motor imediatamente. Risco de quebra de canaleta.",
+        "actuators": ["FAN_CHT", "FAN_OIL"],
+        "intensity": "100%"
+      }
+    },
+
+    {
+      "id": "ERR_OVERLOAD_COMBINED",
+      "grau": 3,
+      "description": "Sobrecarga combinada — Motor forçado com pressão de óleo caindo e temperatura subindo.",
+      "gatilho": {
+        "VACUUM": "ALERTA",
+        "OIL_TEMP": "ALERTA"
+      },
+      "agravantes": [
+        { "sensor": "RPM",          "operator": ">=", "value": 3500, "peso": 2 },
+        { "sensor": "OIL_PRESSURE", "operator": "<",  "value": 1.2,  "peso": 2 },
+        { "sensor": "CHT",          "operator": ">=", "value": 90,   "peso": 1 }
+      ],
+      "peso_para_escalar": 2,
+      "PREDICTIVE_1": {
+        "eta_minutos": 5,
+        "tag": "PRE_DAMAGE_WARNING",
+        "description": "Motor em sobrecarga combinada. Reduza carga — troque para marcha mais baixa.",
+        "actuators": ["FAN_OIL", "FAN_CHT"],
+        "intensity": "50%"
+      },
+      "PREDICTIVE_2": {
+        "eta_minutos": 2,
+        "tag": "PRE_DAMAGE_CRITICAL",
+        "description": "Sobrecarga crítica — Motor próximo ao colapso. Reduza velocidade imediatamente.",
         "actuators": ["FAN_OIL", "FAN_CHT"],
         "intensity": "100%"
       }
     }
+
   ]
 }

@@ -8,19 +8,28 @@ class SensorRouterController {
   async rotear(sensorName, value, rawGlobalState) {
     try {
       switch (sensorName) {
+
+        // ── PIPELINE COMPLETO (histórico + math + ticket) ────────
         case 'OIL_TEMP':
-          await OILTSensor.processar(value, rawGlobalState);
+          await OILTSensor.processar(value, 'WS');
           break;
 
-        case 'CHT_TEMP':
-          await CHTSensor.processar(value, rawGlobalState);
+        case 'CHT':
+          await CHTSensor.processar(value, 'WS');
+          break;
+
+        // ── SÓ ACIONA CROSS ANALYSIS (sem pipeline próprio) ──────
+        case 'OIL_PRESSURE':
+        case 'LAMBDA':
+          logger.info(`🔀 [SENSOR_ROUTER] ${sensorName} em alerta — acionando cross analysis.`);
           break;
 
         default:
+          logger.debug(`[SENSOR_ROUTER] Tag sem handler: ${sensorName}`);
           break;
       }
 
-      // CROSS ANALYSIS — sempre após qualquer sensor térmico processar
+      // CROSS ANALYSIS — roda sempre, independente do sensor
       await thermalDamage.avaliar(
         OILTSensor.getEstado(),
         CHTSensor.getEstado()
