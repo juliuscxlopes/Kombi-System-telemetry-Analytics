@@ -14,6 +14,7 @@ class TicketManager {
       const entries = await redisConfig.client.xrevrange(STREAM_ALERTS, '+', '-', 'COUNT', 50);
 
       for (const [id, fields] of entries) {
+        logger.debug(`[TICKET_MANAGER] RAW fields[0]: ${fields[0]} | fields[1]: ${fields[1]}`);
         const data = JSON.parse(fields[1]);
         logger.debug(`[TICKET_MANAGER] Entry: ${JSON.stringify(fields)}`);
         if (data.sensor === this.sensorName && data.lifecycle === 'ABERTO') {
