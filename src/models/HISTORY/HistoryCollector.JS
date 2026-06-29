@@ -35,7 +35,7 @@ class HistoryCollector {
       }
 
       const allPoints = this._parseRegistros(registrosStream, sensorName);
-      //logger.debug(`📚 [HISTORY_COLLECTOR] ${sensorName} | Total de pontos: ${allPoints.length}`);
+      logger.debug(`📚 [HISTORY_COLLECTOR] ${sensorName} | Total de pontos: ${allPoints.length}`);
 
       // Particiona por janela e retorna
       const historicos = {};

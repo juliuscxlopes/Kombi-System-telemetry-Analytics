@@ -1,4 +1,3 @@
-// src/models/MATH/ThermalEngineMath.js
 const deltaCalculator = require('./DeltaCalculator');
 const etaCalculator   = require('./ETACalculator');
 const classificador   = require('./Classificador');
@@ -17,17 +16,23 @@ class ThermalEngineMath {
    * @param {Object} ticketContext   — { valorNaAbertura, aberturaTs } | null
    */
   processar(sensorName, historicos, ticketContext = null) {
+    logger.debug(`[DEBUG] 🚀 [ThermalEngineMath.processar] Iniciando para sensor: ${sensorName}`);
+    
     const resultado = {
-      sensor:          sensorName,
+      sensor:        sensorName,
       tsProcessamento: Date.now(),
-      janelas:         {},
-      diagnostico:     null
+      janelas:       {},
+      diagnostico:   null
     };
 
+    logger.debug(`[DEBUG] 📖 [ThermalEngineMath] Buscando spec em metrics_specs.metrics_specs["${sensorName}"]`);
     const spec = metricsSpecs.metrics_specs[sensorName];
+    logger.debug(`[DEBUG] 🔍 [ThermalEngineMath] Spec encontrada: ${spec ? 'SIM' : 'NÃO (undefined)'}`);
 
     for (const janela of this.janelas) {
       const historyPoints = historicos[janela];
+
+      logger.debug(`[DEBUG] ⏱️ [ThermalEngineMath] Analisando janela ${janela} | pontos: ${historyPoints ? historyPoints.length : 0}`);
 
       if (!historyPoints || historyPoints.length < 2) {
         resultado.janelas[janela] = { disponivel: false };
@@ -54,12 +59,14 @@ class ThermalEngineMath {
 
       // Diagnóstico na janela de 30s — mais reativo
       if (janela === '30s') {
+        logger.debug(`[DEBUG] ⚙️ [ThermalEngineMath] Calculando delta ticket para 30s`);
         const deltaTicket = deltaCalculator.calcularTicket(
           valorAtual,
           ticketContext?.valorNaAbertura ?? null,
           spec?.delta_ticket
         );
 
+        logger.debug(`[DEBUG] 🧠 [ThermalEngineMath] Chamando classificador.classificar()`);
         resultado.diagnostico = classificador.classificar(
           sensorName,
           deltaJanela,
@@ -68,6 +75,7 @@ class ThermalEngineMath {
         );
 
         resultado.diagnostico.deltaTicket = deltaTicket;
+        logger.debug(`[DEBUG] ✅ [ThermalEngineMath] Diagnóstico de 30s concluído com sucesso.`);
       }
     }
 
@@ -82,6 +90,7 @@ class ThermalEngineMath {
       logger.debug(`🟢 [MATH:${sensorName}] Diagnóstico padrão — janela 30s indisponível.`);
     }
 
+    logger.debug(`[DEBUG] 🏁 [ThermalEngineMath.processar] Finalizado processamento para ${sensorName}`);
     return resultado;
   }
 }
