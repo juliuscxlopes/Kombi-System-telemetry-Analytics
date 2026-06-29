@@ -1,7 +1,7 @@
 // src/models/MATH/Classificador.js
-const engineSpecs  = require('../engine_Specs.json');
-const metricsSpecs = require('../metrics_specs.json');
-const logger = require('../../../../log/logger');
+const engineSpecs  = require('./engine_Specs.json');
+const metricsSpecs = require('./metrics_specs.json');
+const logger = require('../../../log/logger');
 
 class Classificador {
 
