@@ -1,5 +1,5 @@
 // src/models/MATH/ETACalculator.js
-const engine_Specs = require('../engine_Specs.json');
+const engine_Specs = require('./engine_Specs.json');
 
 class ETACalculator {
 
