@@ -36,14 +36,20 @@ class Classificador {
 
     // ── PREDICTIVE — só se houver nível ──────────────────────
     let predictive = null;
-    if (nivel !== 'TOLERAVEL' && spec.predictive[nivel]) {
-      predictive = {
-        tipo:        nivel,
-        actuator:    spec.predictive[nivel].actuator,
-        intensity:   spec.predictive[nivel].intensity,
-        description: spec.predictive[nivel].description
-      };
-    }
+    if (nivel !== 'TOLERAVEL') {
+          const specPreditiva = spec?.predictive?.[nivel];
+          
+          if (specPreditiva) {
+            predictive = {
+              tipo:        nivel,
+              actuator:    specPreditiva.actuator,
+              intensity:   specPreditiva.intensity,
+              description: specPreditiva.description
+            };
+          } else {
+            logger.warn(`⚠️ [CLASSIFICADOR:${sensorName}] Nível '${nivel}' gerado, mas sem configuração preditiva correspondente em metrics_specs.json.`);
+          }
+        }
 
     logger.info(`🩺 [CLASSIFICADOR:${sensorName}] Nível: ${nivel} | Votos: taxa=${votos.taxa} proj=${votos.projecao} ticket=${votos.delta_ticket} | Predictive: ${predictive?.tipo ?? 'null'}`);
 
