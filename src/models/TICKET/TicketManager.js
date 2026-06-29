@@ -1,10 +1,18 @@
-// src/models/TICKET/TicketManager.js
 const redisConfig = require('../../Infra/Redis/config/redisConfig');
 const logger = require('../../log/logger');
 
 class TicketManager {
   constructor(sensorName) {
     this.sensorName = sensorName;
+    // Hierarquia de severidade para identificar subidas e descidas de status
+    this.hierarquia = {
+      'OPERACIONAL': 0,
+      'TOLERAVEL': 0,
+      'PREDICTIVE_1': 1,
+      'PREDICTIVE_2': 2,
+      'PREDICTIVE_3': 3,
+      'PREDICTIVE_4': 4
+    };
   }
 
   async buscarTicketAtivo() {
@@ -17,7 +25,7 @@ class TicketManager {
 
       const data = JSON.parse(raw);
 
-      if (data.lifecycle === 'ABERTO') {
+      if (data.lifecycle === 'ABERTO' || data.lifecycle === 'ESCALONADO' || data.lifecycle === 'REBAIXADO') {
         logger.debug(`🔍 [TICKET_MANAGER:${this.sensorName}] Ticket ativo encontrado: ${data.ticket}`);
         return data;
       }
@@ -37,7 +45,7 @@ class TicketManager {
 
   async processar(statusAtual, diagnosticResult) {
     try {
-      logger.debug(`🎫 [TICKET_MANAGER:${this.sensorName}] Processando | Status: ${statusAtual}`);
+      logger.debug(`🎫 [TICKET_MANAGER:${this.sensorName}] Processando | Status (Nível): ${statusAtual}`);
 
       const ticketAtivo = await this.buscarTicketAtivo();
 
@@ -62,7 +70,6 @@ class TicketManager {
 
       // ── SEM TICKET: abre novo ──────────────────────────────
       if (!ticketAtivo) {
-        // Não abre ticket se sensor ainda está FRIO
         const statusFisico = await this._buscarStatusFisico();
         if (statusFisico === 'FRIO' || statusFisico === 'OFF') {
           logger.debug(`🧊 [TICKET_MANAGER:${this.sensorName}] Sensor em ${statusFisico} — ticket bloqueado.`);
@@ -78,29 +85,35 @@ class TicketManager {
         return payload;
       }
 
-      // ── TICKET ATIVO: verifica transições ──────────────────
+      // ── TICKET ATIVO: transição DEBOUNCED ──────────────────
       if (ticketAtivo.status === statusAtual) {
         logger.debug(`🔁 [TICKET_MANAGER:${this.sensorName}] DEBOUNCED — ticket ${ticketAtivo.ticket} já em ${statusAtual}`);
         return { lifecycle: 'DEBOUNCED', ticket: ticketAtivo.ticket };
       }
 
-      if (ticketAtivo.status === 'ALERTA' && statusAtual === 'CRITICO') {
-        const payload = this._montarPayload(ticketAtivo.ticket, 'CRITICO', 'ESCALONADO', diagnosticResult, {
+      // ── TICKET ATIVO: verifica ESCALONAMENTO ou REBAIXAMENTO ──
+      const pesoAnterior = this.hierarquia[ticketAtivo.status] || 0;
+      const pesoAtual = this.hierarquia[statusAtual] || 0;
+
+      if (pesoAtual > pesoAnterior) {
+        // Escalonamento de severidade
+        const payload = this._montarPayload(ticketAtivo.ticket, statusAtual, 'ESCALONADO', diagnosticResult, {
           aberturaTs: ticketAtivo.aberturaTs,
           escalonamentoTs: Date.now()
         });
         await redisConfig.client.hset(redisConfig.HASHES.ALERTS, this.sensorName, JSON.stringify(payload));
-        logger.warn(`📈 [TICKET_MANAGER:${this.sensorName}] Ticket ESCALONADO ${ticketAtivo.ticket} | ALERTA → CRITICO`);
+        logger.warn(`📈 [TICKET_MANAGER:${this.sensorName}] Ticket ESCALONADO ${ticketAtivo.ticket} | ${ticketAtivo.status} → ${statusAtual}`);
         return payload;
       }
 
-      if (ticketAtivo.status === 'CRITICO' && statusAtual === 'ALERTA') {
-        const payload = this._montarPayload(ticketAtivo.ticket, 'ALERTA', 'REBAIXADO', diagnosticResult, {
+      if (pesoAtual < pesoAnterior) {
+        // Rebaixamento de severidade (contenção surtindo efeito)
+        const payload = this._montarPayload(ticketAtivo.ticket, statusAtual, 'REBAIXADO', diagnosticResult, {
           aberturaTs: ticketAtivo.aberturaTs,
           rebaixamentoTs: Date.now()
         });
         await redisConfig.client.hset(redisConfig.HASHES.ALERTS, this.sensorName, JSON.stringify(payload));
-        logger.info(`📉 [TICKET_MANAGER:${this.sensorName}] Ticket REBAIXADO ${ticketAtivo.ticket} | CRITICO → ALERTA`);
+        logger.info(`📉 [TICKET_MANAGER:${this.sensorName}] Ticket REBAIXADO ${ticketAtivo.ticket} | ${ticketAtivo.status} → ${statusAtual}`);
         return payload;
       }
 
@@ -114,10 +127,9 @@ class TicketManager {
     return {
       ticket,
       sensor: this.sensorName,
-      status,
-      lifecycle,
-      ...(diagnosticResult.severidade && { severidade: diagnosticResult.severidade }),
-      ...(diagnosticResult.motivos    && { motivos: diagnosticResult.motivos }),
+      status,       // Representa o nível atual (Ex: PREDICTIVE_4)
+      lifecycle,    // Ciclo de vida da transição (Ex: ABERTO, ESCALONADO, FECHADO)
+      ...(diagnosticResult.motivos && { motivos: diagnosticResult.motivos }),
       ...(diagnosticResult.predictive && { predictive: diagnosticResult.predictive }),
       ...timestamps,
       timestamp: Date.now()
