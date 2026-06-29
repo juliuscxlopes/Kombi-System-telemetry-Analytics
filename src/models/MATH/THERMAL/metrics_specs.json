@@ -1,90 +1,105 @@
 {
-  "name_spec":"metric_specs",
-  "version": "1.1.0",
-  "updated_at": "2026-06-24",
+  "name_spec": "metric_specs",
+  "version": "2.0.0",
+  "updated_at": "2026-06-27",
 
   "metrics_specs": {
 
     "OIL_TEMP": {
       "unit": "°C",
-      "janela": "1m",
+      "janela": "30s",
 
       "taxa_subida": {
         "unit": "°C/min",
         "description": "Velocidade de aquecimento por minuto",
-        "TOLERAVEL": 1.5,
-        "ALERTA":    2.5,
-        "CRITICO":   4.0
+        "PREDICTIVE_1": 1.5,
+        "PREDICTIVE_2": 2.5,
+        "PREDICTIVE_3": 3.2,
+        "PREDICTIVE_4": 4.0
       },
 
       "delta": {
         "unit": "°C",
-        "description": "Variação absoluta na janela de 1 minuto",
-        "TOLERAVEL": 1.5,
-        "ALERTA":    2.5,
-        "CRITICO":   4.0
+        "description": "Variação absoluta na janela de 30s",
+        "PREDICTIVE_1": 1.5,
+        "PREDICTIVE_2": 2.5,
+        "PREDICTIVE_3": 3.2,
+        "PREDICTIVE_4": 4.0
       },
 
-      "projecao_1m": {
+      "delta_ticket": {
         "unit": "°C",
-        "description": "Valor projetado em 1 minuto cruzado com thresholds físicos",
-        "ALERTA":  88.0,
-        "CRITICO": 92.0
+        "description": "Variação desde abertura do ticket — double check de eficácia da contenção",
+        "SAUDAVEL":  -0.5,
+        "ESTAVEL":    0.5,
+        "PIORANDO":   1.5,
+        "CRITICO":    3.0
+      },
+
+      "projecao_30s": {
+        "unit": "°C",
+        "description": "Valor projetado em 30s cruzado com thresholds físicos",
+        "PREDICTIVE_1": 84.0,
+        "PREDICTIVE_2": 86.0,
+        "PREDICTIVE_3": 88.0,
+        "PREDICTIVE_4": 92.0
       },
 
       "predictive": {
-        "PREDICTIVE_1": {
-          "description": "Projeção cruza ALERTA em 1min — atuação preventiva leve",
-          "actuator": "FAN_OIL",
-          "intensity": "25%"
-        },
-        "PREDICTIVE_2": {
-          "description": "Projeção cruza CRITICO em 1min — atuação preventiva forte",
-          "actuator": "FAN_OIL",
-          "intensity": "75%"
-        }
+        "PREDICTIVE_1": { "actuator": "FAN_OIL", "intensity": "25%",  "description": "Aquecimento detectado — atuação preventiva leve" },
+        "PREDICTIVE_2": { "actuator": "FAN_OIL", "intensity": "50%",  "description": "Tendência confirmada — reflexo preventivo" },
+        "PREDICTIVE_3": { "actuator": "FAN_OIL", "intensity": "75%",  "description": "Contenção insuficiente — escalada" },
+        "PREDICTIVE_4": { "actuator": "FAN_OIL", "intensity": "100%", "description": "Crítico iminente — emergência" }
       }
     },
 
     "CHT": {
       "unit": "°C",
-      "janela": "1m",
+      "janela": "30s",
 
       "taxa_subida": {
         "unit": "°C/min",
         "description": "Velocidade de aquecimento por minuto",
-        "TOLERAVEL": 2.0,
-        "ALERTA":    4.0,
-        "CRITICO":   6.0
+        "PREDICTIVE_1": 2.0,
+        "PREDICTIVE_2": 3.5,
+        "PREDICTIVE_3": 5.0,
+        "PREDICTIVE_4": 6.0
       },
 
       "delta": {
         "unit": "°C",
-        "description": "Variação absoluta na janela de 1 minuto",
-        "TOLERAVEL": 2.0,
-        "ALERTA":    4.0,
-        "CRITICO":   6.0
+        "description": "Variação absoluta na janela de 30s",
+        "PREDICTIVE_1": 2.0,
+        "PREDICTIVE_2": 3.5,
+        "PREDICTIVE_3": 5.0,
+        "PREDICTIVE_4": 6.0
       },
 
-      "projecao_1m": {
+      "delta_ticket": {
         "unit": "°C",
-        "description": "Valor projetado em 1 minuto cruzado com thresholds físicos",
-        "ALERTA":  131.0,
-        "CRITICO": 150.0
+        "description": "Variação desde abertura do ticket — double check de eficácia da contenção",
+        "SAUDAVEL":  -0.5,
+        "ESTAVEL":    0.5,
+        "PIORANDO":   2.0,
+        "CRITICO":    4.0
+      },
+
+      "projecao_30s": {
+        "unit": "°C",
+        "description": "Valor projetado em 30s cruzado com thresholds físicos",
+        "PREDICTIVE_1":  93.0,
+        "PREDICTIVE_2":  98.0,
+        "PREDICTIVE_3": 103.0,
+        "PREDICTIVE_4": 108.0
       },
 
       "predictive": {
-        "PREDICTIVE_1": {
-          "description": "Projeção cruza ALERTA em 1min — atuação preventiva leve",
-          "actuator": "FAN_CHT",
-          "intensity": "25%"
-        },
-        "PREDICTIVE_2": {
-          "description": "Projeção cruza CRITICO em 1min — atuação preventiva forte",
-          "actuator": "FAN_CHT",
-          "intensity": "75%"
-        }
+        "PREDICTIVE_1": { "actuator": "FAN_CHT", "intensity": "25%",  "description": "Aquecimento detectado — atuação preventiva leve" },
+        "PREDICTIVE_2": { "actuator": "FAN_CHT", "intensity": "50%",  "description": "Tendência confirmada — reflexo preventivo" },
+        "PREDICTIVE_3": { "actuator": "FAN_CHT", "intensity": "75%",  "description": "Contenção insuficiente — escalada" },
+        "PREDICTIVE_4": { "actuator": "FAN_CHT", "intensity": "100%", "description": "Crítico iminente — emergência" }
       }
     }
+
   }
 }

@@ -26,70 +26,74 @@ class OILTSensor {
         }
         const estado = JSON.parse(raw);
         value = estado.value;
-        //logger.debug(`🔄 [OILT_SENSOR] Valor buscado do engine state: ${value}`);
       }
-
-      //logger.info(`🔵 [OILT_SENSOR] Iniciando pipeline | value: ${value} | origem: ${origem ?? 'WS'}`);
 
       // 1. HISTÓRICOS
       const historicos = await historyCollector.coletar(this.sensorName);
-      //logger.debug(`📚 [OILT_SENSOR] Históricos coletados | 30s: ${historicos['30s']?.length ?? 0} | 1m: ${historicos['1m']?.length ?? 0} | 3m: ${historicos['3m']?.length ?? 0} | 5m: ${historicos['5m']?.length ?? 0}`);
 
-      // 2. MATH
-      const resultado = thermalEngineMath.processar(this.sensorName, historicos);
+      // 2. TICKET CONTEXT — passa valorNaAbertura pro math fazer double check
+      const ticketContext = this.ticketAtivo ? {
+        valorNaAbertura: this.ticketAtivo.valorNaAbertura,
+        aberturaTs:      this.ticketAtivo.aberturaTs
+      } : null;
+
+      // 3. MATH — agora recebe ticketContext para delta_ticket
+      const resultado = thermalEngineMath.processar(this.sensorName, historicos, ticketContext);
       const diagnostico = resultado.diagnostico;
-      //logger.debug(`🧮 [OILT_SENSOR] Math concluído | Severidade: ${diagnostico?.severidade} | Predictive: ${diagnostico?.predictive?.tipo ?? 'null'} | Janelas disponíveis: ${Object.keys(resultado.janelas).filter(j => resultado.janelas[j].disponivel !== false).join(', ')}`);
 
-      // 3. TICKET MANAGER
-      const ticketPayload = await this.ticketManager.processar(diagnostico.severidade, diagnostico);
-      //logger.debug(`🎫 [OILT_SENSOR] Ticket | Lifecycle: ${ticketPayload.lifecycle} | Ticket: ${ticketPayload.ticket ?? 'null'}`);
+      logger.info(`🔵 [OILT_SENSOR] Math | Nível: ${diagnostico.nivel} | Votos: taxa=${diagnostico.votos?.taxa} proj=${diagnostico.votos?.projecao} ticket=${diagnostico.deltaTicket?.estado ?? 'SEM_TICKET'} | Predictive: ${diagnostico.predictive?.tipo ?? 'null'} | Origem: ${origem ?? 'WS'}`);
 
-      // Atualiza estado interno
+      // 4. TICKET MANAGER
+      const ticketPayload = await this.ticketManager.processar(diagnostico.nivel, diagnostico);
+
+      // Atualiza estado interno — guarda valorNaAbertura para o ticketContext futuro
       this.ultimoDiagnostico = resultado;
-      if (ticketPayload.lifecycle === 'FECHADO') this.ticketAtivo = null;
-      else if (ticketPayload.lifecycle !== 'DEBOUNCED' && ticketPayload.lifecycle !== 'NOOP') {
-        this.ticketAtivo = ticketPayload;
+      if (ticketPayload.lifecycle === 'FECHADO') {
+        this.ticketAtivo = null;
+      } else if (ticketPayload.lifecycle === 'ABERTO') {
+        this.ticketAtivo = {
+          ...ticketPayload,
+          valorNaAbertura: value // guarda o valor no momento da abertura
+        };
+      } else if (ticketPayload.lifecycle !== 'DEBOUNCED' && ticketPayload.lifecycle !== 'NOOP') {
+        this.ticketAtivo = { ...this.ticketAtivo, ...ticketPayload };
       }
 
-      // 4. ATUALIZA METRICS — sempre, independente do lifecycle
+      // 5. ATUALIZA METRICS — sempre
       await redisConfig.client.hset(
         redisConfig.HASHES.METRICS,
         this.sensorName,
         JSON.stringify({
-          sensor: this.sensorName,
-          origem: origem ?? 'WS',
+          sensor:    this.sensorName,
+          origem:    origem ?? 'WS',
           timestamp: Date.now(),
           diagnostico
         })
       );
 
       // DEBOUNCED ou NOOP — encerra após atualizar metrics
-      if (ticketPayload.lifecycle === 'DEBOUNCED' || ticketPayload.lifecycle === 'NOOP') {
-        //logger.debug(`⏭️  [OILT_SENSOR] ${ticketPayload.lifecycle} — pipeline encerrado.`);
-        return;
-      }
+      if (ticketPayload.lifecycle === 'DEBOUNCED' || ticketPayload.lifecycle === 'NOOP') return;
 
-      // 5. ATUADOR PREDITIVO
+      // 6. ATUADOR PREDITIVO
       if (diagnostico.predictive) {
         const { actuator, intensity, tipo } = diagnostico.predictive;
         wsEmitter.broadcast(actuator, { intensity, tipo, timestamp: Date.now() });
-        //logger.info(`⚡ [OILT_SENSOR] Preditivo disparado | ${actuator} → ${intensity}`);
+        logger.info(`⚡ [OILT_SENSOR] Preditivo disparado | ${actuator} → ${intensity} (${tipo})`);
       }
 
-      // 6. BROADCAST FRONTEND
+      // 7. BROADCAST FRONTEND
       const payloadHealth = {
-        ticket: ticketPayload.ticket,
-        sensor: this.sensorName,
-        origem: origem ?? 'WS',
+        ticket:    ticketPayload.ticket,
+        sensor:    this.sensorName,
+        origem:    origem ?? 'WS',
         lifecycle: ticketPayload.lifecycle,
         timestamp: Date.now(),
-        janelas: resultado.janelas,
+        janelas:   resultado.janelas,
         diagnostico
       };
 
       wsEmitter.broadcast('health', payloadHealth);
-
-      logger.info(`📡 [OILT_SENSOR] Pipeline concluído | Ticket: ${ticketPayload.ticket} | Severidade: ${diagnostico.severidade} | Lifecycle: ${ticketPayload.lifecycle} | Origem: ${origem ?? 'WS'}`);
+      logger.info(`📡 [OILT_SENSOR] Pipeline concluído | Ticket: ${ticketPayload.ticket} | Nível: ${diagnostico.nivel} | Lifecycle: ${ticketPayload.lifecycle}`);
 
     } catch (err) {
       logger.error(`❌ [OILT_SENSOR] Falha no pipeline: ${err.message}`);
@@ -98,8 +102,8 @@ class OILTSensor {
 
   getEstado() {
     return {
-      ticketAtivo: this.ticketAtivo,
-      diagnostico: this.ultimoDiagnostico
+      ticketAtivo:      this.ticketAtivo,
+      diagnostico:      this.ultimoDiagnostico
     };
   }
 }

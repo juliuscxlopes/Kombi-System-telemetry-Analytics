@@ -152,6 +152,36 @@
         "actuators": ["FAN_OIL", "FAN_CHT"],
         "intensity": "100%"
       }
+    },
+
+    {
+      "id": "ERR_AIR_LEAK_SUSPECTED",
+      "grau": 3,
+      "description": "Possível escape de ar no coletor ou carburador — Mistura pobre com vácuo anormal.",
+      "gatilho": {
+        "LAMBDA": "ALERTA",
+        "VACUUM": "ALERTA"
+      },
+      "agravantes": [
+        { "sensor": "LAMBDA", "operator": ">=", "value": 1.05, "peso": 3 },
+        { "sensor": "VACUUM", "operator": "<=", "value": 60,   "peso": 2 },
+        { "sensor": "RPM",    "operator": ">=", "value": 2000, "peso": 1 }
+      ],
+      "peso_para_escalar": 3,
+      "PREDICTIVE_1": {
+        "eta_minutos": 10,
+        "tag": "PRE_DAMAGE_WARNING",
+        "description": "Mistura pobre com vácuo baixo — Verifique escape de ar no coletor ou carburador.",
+        "actuators": [],
+        "intensity": "0%"
+      },
+      "PREDICTIVE_2": {
+        "eta_minutos": 5,
+        "tag": "PRE_DAMAGE_CRITICAL",
+        "description": "Escape de ar confirmado — Motor operando com mistura crítica. Verifique imediatamente.",
+        "actuators": [],
+        "intensity": "0%"
+      }
     }
 
   ]
