@@ -1,5 +1,5 @@
 // src/models/MATH/ETACalculator.js
-const engineSpecs = require('../engine_Specs.json');
+const engine_Specs = require('../engine_Specs.json');
 
 class ETACalculator {
 
@@ -8,7 +8,7 @@ class ETACalculator {
    * Calcula tempo para atingir limites físicos e projeções em 30s/1m/3m/5m
    */
   calcular(valorAtual, taxaPorMinuto, sensorName) {
-    const spec = engineSpecs.specs[sensorName];
+    const spec = engine_Specs.specs[sensorName];
 
     const projecoes = {
       em30s:     parseFloat((valorAtual + taxaPorMinuto * 0.5).toFixed(1)),
