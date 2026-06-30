@@ -1,6 +1,5 @@
-// src/controllers/SensorRouterController.js
-const OILTSensor    = require('../models/SENSORS/THERMAL/OilTSensor');
-const CHTSensor     = require('../models/SENSORS/THERMAL/CHTSensor');
+const OILTSensor     = require('../models/SENSORS/THERMAL/OilTSensor');
+const CHTSensor      = require('../models/SENSORS/THERMAL/CHTSensor');
 const thermalDamage = require('../models/DAMAGE/THERMAL/ThermalDamageModule');
 const logger        = require('../log/logger');
 
@@ -8,8 +7,7 @@ class SensorRouterController {
   async rotear(sensorName, value, rawGlobalState) {
     try {
       switch (sensorName) {
-
-        // ── PIPELINE COMPLETO (histórico + math + ticket) ────────
+        // ── PIPELINE TÉRMICO (histórico + math + ticket) ────────
         case 'OIL_TEMP':
           await OILTSensor.processar(value, 'WS');
           break;
@@ -18,18 +16,20 @@ class SensorRouterController {
           await CHTSensor.processar(value, 'WS');
           break;
 
-        // ── SÓ ACIONA CROSS ANALYSIS (sem pipeline próprio) ──────
-        case 'OIL_PRESSURE':
+        // ── ACIONAMENTOS DE CROSS ANALYSIS (direto do core) ──────
+        case 'RPM':
+        case 'VACC':
+        case 'OIL_PRES':
         case 'LAMBDA':
-          logger.info(`🔀 [SENSOR_ROUTER] ${sensorName} em alerta — acionando cross analysis.`);
+          logger.info(`🔀 [SENSOR_ROUTER] ${sensorName} recebido — acionando cross analysis.`);
           break;
 
         default:
-          logger.debug(`[SENSOR_ROUTER] Tag sem handler: ${sensorName}`);
+          logger.debug(`[SENSOR_ROUTER] Tag sem handler específico: ${sensorName}`);
           break;
       }
 
-      // CROSS ANALYSIS — roda sempre, independente do sensor
+      // 🚀 CROSS ANALYSIS — roda sempre, buscando o snapshot atualizado de tudo no Redis
       await thermalDamage.avaliar(
         OILTSensor.getEstado(),
         CHTSensor.getEstado()

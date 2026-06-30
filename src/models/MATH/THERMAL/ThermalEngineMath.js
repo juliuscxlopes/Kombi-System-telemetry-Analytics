@@ -7,7 +7,7 @@ const logger          = require('../../../log/logger');
 class ThermalEngineMath {
   constructor() {
     this.NAME   = 'THERMAL_ENGINE_MATH';
-    this.janelas = ['30s', '1m', '3m', '5m'];
+    this.janelas = ['30s', '1m'];
   }
 
   /**

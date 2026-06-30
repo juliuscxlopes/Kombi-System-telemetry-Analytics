@@ -15,8 +15,6 @@ class ETACalculator {
     const projecoes = {
       em30s:      parseFloat((valorAtual + taxaPorMinuto * 0.5).toFixed(1)),
       em1Minuto:  parseFloat((valorAtual + taxaPorMinuto * 1).toFixed(1)),
-      em3Minutos: parseFloat((valorAtual + taxaPorMinuto * 3).toFixed(1)),
-      em5Minutos: parseFloat((valorAtual + taxaPorMinuto * 5).toFixed(1))
     };
 
     logger.debug(`[DEBUG_ETA] 🔮 [ETACalculator] Projeções calculadas: ${JSON.stringify(projecoes)}`);
