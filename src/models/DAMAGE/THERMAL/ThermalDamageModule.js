@@ -1,11 +1,10 @@
-// src/models/DAMAGE/THERMAL/ThermalDamageModule.js
 const redisConfig = require('../../../Infra/Redis/config/redisConfig');
 const wsEmitter = require('../../../Infra/websocket/WsEmitter');
 const publisherService = require('../../../Infra/Redis/Publisher/PublisherService');
 const crossSpec = require('./ThermalDamageSpecs.json');
 const logger = require('../../../log/logger');
 
-const STREAM_HEALTH = 'stream:health';
+const STREAM_ALERTS = 'stream:alerts';
 
 class ThermalDamageModule {
   constructor() {
@@ -17,7 +16,7 @@ class ThermalDamageModule {
     try {
       // ── BUSCA ESTADO COMPLETO DO ENGINE ───────────────────────
       const engineState = await redisConfig.client.hgetall(redisConfig.HASHES.ENGINE_STATE) || {};
-      const currentValues  = {};
+      const currentValues   = {};
       const currentStatuses = {};
 
       for (const [key, val] of Object.entries(engineState)) {
@@ -30,15 +29,14 @@ class ThermalDamageModule {
         }
       }
 
-      const etaOil = estadoOil?.diagnostico?.janelas?.['1m']?.etaParaLimites?.criticoMinutos ?? 999;
-      const etaCHT = estadoCHT?.diagnostico?.janelas?.['1m']?.etaParaLimites?.criticoMinutos ?? 999;
+      const etaOil = estadoOil?.diagnostico?.janelas?.['30s']?.etaParaLimites?.criticoMinutos ?? 999;
+      const etaCHT = estadoCHT?.diagnostico?.janelas?.['30s']?.etaParaLimites?.criticoMinutos ?? 999;
       const piorETA = Math.min(etaOil, etaCHT);
 
       // ── AVALIA TODAS AS REGRAS ────────────────────────────────
       const regrasAtivas = [];
 
       for (const rule of this.rules) {
-
         // 1. VERIFICA GATILHO
         const gatilhoAtivo = Object.entries(rule.gatilho).every(([sensor, statusExigido]) => {
           return this._statusMaisGrave(currentStatuses[sensor], statusExigido);
@@ -68,12 +66,14 @@ class ThermalDamageModule {
           nivel = 'PREDICTIVE_1';
         }
 
-        const spec = nivel ? rule[nivel] : null;
+        if (!nivel) continue;
+
+        const spec = rule[nivel];
 
         regrasAtivas.push({
           ruleId:          rule.id,
           grau:            rule.grau,
-          nivel:           nivel ?? 'MONITORANDO',
+          nivel:           nivel,
           tag:             spec?.tag ?? 'PRE_DAMAGE_WARNING',
           description:     spec?.description ?? rule.description,
           actuators:       spec?.actuators ?? [],
@@ -82,10 +82,9 @@ class ThermalDamageModule {
           pesoTotal
         });
 
-        logger.warn(`🌡️  [${this.NAME}] Regra ativa: ${rule.id} | Nível: ${nivel ?? 'MONITORANDO'} | Peso: ${pesoTotal}`);
+        logger.warn(`🌡️  [${this.NAME}] Regra cruzada ativa: ${rule.id} | Nível: ${nivel} | Peso: ${pesoTotal}`);
       }
 
-      // ── SNAPSHOT DO ENGINE ────────────────────────────────────
       const engineSnapshot = {
         OIL_TEMP:     { valor: currentValues['OIL_TEMP'],     status: currentStatuses['OIL_TEMP'],     etaCriticoMinutos: etaOil },
         CHT:          { valor: currentValues['CHT'],          status: currentStatuses['CHT'],          etaCriticoMinutos: etaCHT },
@@ -95,24 +94,14 @@ class ThermalDamageModule {
         RPM:          { valor: currentValues['RPM'] }
       };
 
-      // ── SEM REGRAS ATIVAS → OPERACIONAL ──────────────────────
       if (regrasAtivas.length === 0) {
-        const payloadOperacional = {
-          origem: this.NAME,
-          status: 'OPERACIONAL',
-          regrasAtivas: [],
-          engineSnapshot,
-          timestamp: Date.now()
-        };
-
-        await publisherService.health(STREAM_HEALTH, payloadOperacional, {});
-        logger.info(`✅ [${this.NAME}] Sistema operacional — nenhuma regra de dano ativa.`);
+        logger.info(`✅ [${this.NAME}] Sistema operacional — nenhuma regra de dano cruzado ativa.`);
         return;
       }
 
       // ── DISPARA CADA REGRA ATIVA INDIVIDUALMENTE ─────────────
       for (const regra of regrasAtivas) {
-        if (regra.nivel === 'MONITORANDO') continue; // Só dispara WS quando tem nível definido
+        if (regra.nivel === 'MONITORANDO') continue;
 
         const payloadWs = {
           origem:          this.NAME,
@@ -130,23 +119,35 @@ class ThermalDamageModule {
           timestamp:       Date.now()
         };
 
+        // Envia o alerta de anomalia para o front-end via emissor WS
         wsEmitter.broadcast(regra.tag, payloadWs);
-        logger.warn(`🚨 [${this.NAME}] ${regra.tag} | Regra: ${regra.ruleId} | Grau: ${regra.grau} | Peso: ${regra.pesoTotal}`);
+        logger.warn(`🚨 [${this.NAME}] WS Broadcast -> ${regra.tag} | Regra: ${regra.ruleId} | Grau: ${regra.grau}`);
+
+        // Atualiza/Sincroniza o ticket na stream de alertas para o core tratar a intensidade severa
+        const sensorTicketAfetado = regra.ruleId.includes('CHT') ? 'CHT' : 'OIL_TEMP';
+        
+        const payloadAlerta = {
+          ticket: `TICKET_${sensorTicketAfetado}_${Date.now()}`,
+          sensor: sensorTicketAfetado,
+          lifecycle: 'ATUALIZADO',
+          motivos: [
+            `cruzamento_severidade: ${regra.ruleId}`,
+            `agravantes_acumulados: ${regra.pesoTotal}`,
+            `pior_eta: ${piorETA.toFixed(2)}min`
+          ],
+          predictive: {
+            tipo: regra.nivel,
+            actuator: regra.actuators.join(','),
+            intensity: regra.intensity,
+            description: regra.description
+          },
+          aberturaTs: Date.now(),
+          timestamp: Date.now()
+        };
+
+        await publisherService.publish(STREAM_ALERTS, payloadAlerta);
+        logger.warn(`🎫 [${this.NAME}] Ticket ${sensorTicketAfetado} sincronizado na STREAM_ALERTS com intensidade: ${regra.intensity}`);
       }
-
-      // ── PUBLICA ESTADO COMPLETO NA STREAM:HEALTH ─────────────
-      const payloadHealth = {
-        origem:       this.NAME,
-        status:       'ANOMALIA',
-        totalRegras:  regrasAtivas.length,
-        regrasAtivas,
-        piorETA:      parseFloat(piorETA.toFixed(2)),
-        engineSnapshot,
-        timestamp:    Date.now()
-      };
-
-      await publisherService.health(STREAM_HEALTH, payloadHealth, {});
-      logger.warn(`📡 [${this.NAME}] stream:health publicado | ${regrasAtivas.length} regra(s) ativa(s)`);
 
     } catch (err) {
       logger.error(`❌ [${this.NAME}] Falha na avaliação cruzada: ${err.message}`);
