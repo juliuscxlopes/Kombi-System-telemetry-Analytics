@@ -18,8 +18,8 @@ class SensorRouterController {
 
         // ── ACIONAMENTOS DE CROSS ANALYSIS (direto do core) ──────
         case 'RPM':
-        case 'VACC':
-        case 'OIL_PRES':
+        case 'VACUUM':
+        case 'OIL_PRESSURE':
         case 'LAMBDA':
           logger.info(`🔀 [SENSOR_ROUTER] ${sensorName} recebido — acionando cross analysis.`);
           break;
