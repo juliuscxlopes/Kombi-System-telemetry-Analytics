@@ -72,7 +72,7 @@ class CHTSensor {
       // 5. ATUADOR PREDITIVO
       if (diagnostico.predictive) {
         const { actuator, intensity, tipo } = diagnostico.predictive;
-        wsEmitter.broadcast(actuator, { intensity, tipo, timestamp: Date.now() });
+        wsEmitter.broadcast(actuator,intensity);
         logger.info(`⚡ [CHT_SENSOR] Preditivo disparado | ${actuator} → ${intensity}`);
       }
 
