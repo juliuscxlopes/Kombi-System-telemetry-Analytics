@@ -74,12 +74,16 @@ class OILTSensor {
       // DEBOUNCED ou NOOP — encerra após atualizar metrics
       if (ticketPayload.lifecycle === 'DEBOUNCED' || ticketPayload.lifecycle === 'NOOP') return;
 
+
+
       // 6. ATUADOR PREDITIVO
       if (diagnostico.predictive) {
         const { actuator, intensity, tipo } = diagnostico.predictive;
-        wsEmitter.broadcast(actuator, { intensity, tipo, timestamp: Date.now() });
+        wsEmitter.broadcast(actuator, intensity);
         logger.info(`⚡ [OILT_SENSOR] Preditivo disparado | ${actuator} → ${intensity} (${tipo})`);
       }
+
+
 
       // 7. BROADCAST FRONTEND
       const payloadHealth = {

@@ -99,7 +99,7 @@ class ThermalDamageModule {
         return;
       }
 
-      // ── DISPARA CADA REGRA ATIVA INDIVIDUALMENTE ─────────────
+      //precisamos de enviar somente 1 broadcast / o core precisa entender
 // ── DISPARA CADA REGRA ATIVA INDIVIDUALMENTE ─────────────
 for (const regra of regrasAtivas) {
   if (regra.nivel === 'MONITORANDO') continue;
@@ -131,7 +131,7 @@ for (const regra of regrasAtivas) {
         logger.info(`🛫 [${this.NAME}] Comando direto via WS | ${atuadorTag}: ${intensidadePura}`);
       }
     }
-
+    //Verificar isso aqui.
     // 3. PERSISTÊNCIA NA HSET ALERTS
     const sensorTicketAfetado = regra.ruleId.includes('CHT') ? 'CHT' : 'OIL_TEMP';
     const payloadAlerta = {
