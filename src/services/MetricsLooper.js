@@ -45,7 +45,7 @@ class MetricsLooper {
         // Se já tem ticket ativo — sensor já está sendo analisado continuamente
         const ticketAtivo = await redisConfig.client.hget(redisConfig.HASHES.ALERTS, sensorName);
         if (ticketAtivo) {
-          //logger.debug(`👁️  [METRICS_LOOPER] ${sensorName} com ticket ativo — análise contínua via WS. Looper em standby.`);
+          logger.debug(`👁️  [METRICS_LOOPER] ${sensorName} com ticket ativo — análise contínua via WS. Looper em standby.`);
           continue;
         }
 
@@ -54,17 +54,17 @@ class MetricsLooper {
         const agora = Date.now();
 
         if (!ultimaAnalise) {
-          //logger.info(`👁️  [METRICS_LOOPER] ${sensorName} sem análise — solicitando imediatamente.`);
+          logger.info(`👁️  [METRICS_LOOPER] ${sensorName} sem análise — solicitando imediatamente.`);
           await sensor.processar(null, 'PredictiveAnalyzer');
           continue;
         }
 
         const idadeMs = agora - ultimaAnalise.timestamp;
         if (idadeMs > ANALISE_INTERVALO_MS) {
-          //logger.info(`👁️  [METRICS_LOOPER] ${sensorName} análise antiga (${Math.round(idadeMs / 1000)}s) — solicitando nova.`);
+          logger.info(`👁️  [METRICS_LOOPER] ${sensorName} análise antiga (${Math.round(idadeMs / 1000)}s) — solicitando nova.`);
           await sensor.processar(null, 'PredictiveAnalyzer');
         } else {
-          //logger.debug(`👁️  [METRICS_LOOPER] ${sensorName} análise recente (${Math.round(idadeMs / 1000)}s) — ok.`);
+          logger.debug(`👁️  [METRICS_LOOPER] ${sensorName} análise recente (${Math.round(idadeMs / 1000)}s) — ok.`);
         }
 
       } catch (err) {
