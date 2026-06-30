@@ -100,54 +100,61 @@ class ThermalDamageModule {
       }
 
       // ── DISPARA CADA REGRA ATIVA INDIVIDUALMENTE ─────────────
-      for (const regra of regrasAtivas) {
-        if (regra.nivel === 'MONITORANDO') continue;
+// ── DISPARA CADA REGRA ATIVA INDIVIDUALMENTE ─────────────
+for (const regra of regrasAtivas) {
+  if (regra.nivel === 'MONITORANDO') continue;
 
-        const payloadWs = {
-          origem:          this.NAME,
-          ruleId:          regra.ruleId,
-          grau:            regra.grau,
-          nivel:           regra.nivel,
-          tag:             regra.tag,
-          description:     regra.description,
-          actuators:       regra.actuators,
-          intensity:       regra.intensity,
-          agravantesAtivos: regra.agravantesAtivos,
-          pesoTotal:       regra.pesoTotal,
-          piorETA:         parseFloat(piorETA.toFixed(2)),
-          engineSnapshot,
-          timestamp:       Date.now()
-        };
+  // 1. BROADCAST PARA O FRONT-END (Alerta de Dano)
+    const payloadWs = {
+      origem:          this.NAME,
+      ruleId:          regra.ruleId,
+      grau:            regra.grau,
+      nivel:           regra.nivel,
+      tag:             regra.tag,
+      description:     regra.description,
+      agravantesAtivos: regra.agravantesAtivos,
+      pesoTotal:       regra.pesoTotal,
+      piorETA:         parseFloat(piorETA.toFixed(2)),
+      engineSnapshot,
+      timestamp:       Date.now()
+    };
+    wsEmitter.broadcast(regra.tag, payloadWs);
 
-        // Envia o alerta de anomalia para o front-end via emissor WS
-        wsEmitter.broadcast(regra.tag, payloadWs);
-        logger.warn(`🚨 [${this.NAME}] WS Broadcast -> ${regra.tag} | Regra: ${regra.ruleId} | Grau: ${regra.grau}`);
-
-        // Atualiza/Sincroniza o ticket na stream de alertas para o core tratar a intensidade severa
-        const sensorTicketAfetado = regra.ruleId.includes('CHT') ? 'CHT' : 'OIL_TEMP';
-        
-        const payloadAlerta = {
-          ticket: `TICKET_${sensorTicketAfetado}_${Date.now()}`,
-          sensor: sensorTicketAfetado,
-          lifecycle: 'ATUALIZADO',
-          motivos: [
-            `cruzamento_severidade: ${regra.ruleId}`,
-            `agravantes_acumulados: ${regra.pesoTotal}`,
-            `pior_eta: ${piorETA.toFixed(2)}min`
-          ],
-          predictive: {
-            tipo: regra.nivel,
-            actuator: regra.actuators.join(','),
-            intensity: regra.intensity,
-            description: regra.description
-          },
-          aberturaTs: Date.now(),
-          timestamp: Date.now()
-        };
-
-        await publisherService.publish(STREAM_ALERTS, payloadAlerta);
-        logger.warn(`🎫 [${this.NAME}] Ticket ${sensorTicketAfetado} sincronizado na STREAM_ALERTS com intensidade: ${regra.intensity}`);
+    // 2. BROADCAST DE ATUAÇÃO PARA O CORE (String simples: FAN_OIL:100)
+    // O Core já está esperando a tag do atuador e a intensidade pura
+    const intensidadePura = regra.intensity.replace('%', '');
+    
+    if (regra.actuators && regra.actuators.length > 0) {
+      for (const atuadorTag of regra.actuators) {
+        // Broadcast direto na rede com o comando puro (ex: FAN_OIL, 100)
+        wsEmitter.broadcast(atuadorTag, intensidadePura);
+        logger.info(`🛫 [${this.NAME}] Comando direto via WS | ${atuadorTag}: ${intensidadePura}`);
       }
+    }
+
+    // 3. PERSISTÊNCIA NA HSET ALERTS
+    const sensorTicketAfetado = regra.ruleId.includes('CHT') ? 'CHT' : 'OIL_TEMP';
+    const payloadAlerta = {
+      ticket: `TICKET_${sensorTicketAfetado}_${Date.now()}`,
+      sensor: sensorTicketAfetado,
+      lifecycle: 'ATUALIZADO',
+      predictive: {
+        tipo: regra.nivel,
+        intensity: regra.intensity,
+        description: regra.description
+      },
+      timestamp: Date.now()
+    };
+
+    // Persiste no HSET de Alertas
+    await redisConfig.client.hset(
+      'HSET:ALERTS', 
+      sensorTicketAfetado, 
+      JSON.stringify(payloadAlerta)
+    );
+    
+    logger.warn(`🎫 [${this.NAME}] Ticket ${sensorTicketAfetado} persistido em HSET:ALERTS`);
+  }
 
     } catch (err) {
       logger.error(`❌ [${this.NAME}] Falha na avaliação cruzada: ${err.message}`);
