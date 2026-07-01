@@ -74,9 +74,9 @@
       "unit": "°C",
       "janela": "30s",
       "_ref_engine": {
-        "NOMINAL_MAX":       110.0,
-        "ALERTA_THRESHOLD":  111.0,
-        "CRITICO_THRESHOLD": 130.0,
+        "NOMINAL_MAX":       100.0,
+        "ALERTA_THRESHOLD":  101.0,
+        "CRITICO_THRESHOLD": 110.0,
         "margem_alerta":       1.0,
         "margem_critico":     19.0
       },
@@ -110,11 +110,11 @@
 
       "projecao_30s": {
         "unit": "°C",
-        "description": "Ancorada no NOMINAL_MAX (110°C). P1 = 2°C abaixo do teto nominal. P2 = teto nominal. P3 = ALERTA físico. P4 = ALERTA + 25% da margem crítica (19°C).",
-        "PREDICTIVE_1": 108.0,
-        "PREDICTIVE_2": 110.0,
-        "PREDICTIVE_3": 111.0,
-        "PREDICTIVE_4": 115.75
+        "description": "Ancorada no NOMINAL_MAX (100°C). P1 = 2°C abaixo do teto nominal. P2 = teto nominal. P3 = ALERTA físico. P4 = ALERTA + 25% da margem crítica (19°C).",
+        "PREDICTIVE_1": 93.0,
+        "PREDICTIVE_2": 98.0,
+        "PREDICTIVE_3": 105.0,
+        "PREDICTIVE_4": 110.75
       },
 
       "predictive": {

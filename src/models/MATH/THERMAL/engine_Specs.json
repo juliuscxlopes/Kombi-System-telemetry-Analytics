@@ -8,10 +8,10 @@
       "unit": "°C",
       "description": "Temperatura de Cabeçote (Padrão Original)",
       "FRIO_MAX": 80.0,
-      "NOMINAL_MIN": 100.0,
-      "NOMINAL_MAX": 110.0,
-      "ALERTA_THRESHOLD": 111.0,
-      "CRITICO_THRESHOLD": 130.0
+      "NOMINAL_MIN": 90.0,
+      "NOMINAL_MAX": 100.0,
+      "ALERTA_THRESHOLD": 101.0,
+      "CRITICO_THRESHOLD": 110.0
     },
     "OIL_TEMP": {
       "unit": "°C",

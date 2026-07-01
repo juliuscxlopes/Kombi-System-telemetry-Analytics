@@ -5,6 +5,7 @@ const WsListener = require('./src/Infra/websocket/WsListener');
 const redis = require('./src/Infra/Redis/config/redisConfig');
 const logger = require('./src/log/logger');
 const metricsLooper = require('./src/services/MetricsLooper');
+const AlertListener = require('./src/Infra/Redis/Listeners/AlertListener');
 
 
 async function bootstrap() {
@@ -19,6 +20,7 @@ async function bootstrap() {
     });
     WsListener.start();
     metricsLooper.start();
+    alertListener.start()
 
     process.on('SIGINT', async () => {
       logger.info("🛑 [SYSTEM] Parando Analytics...");
