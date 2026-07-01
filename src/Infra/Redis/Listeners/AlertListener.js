@@ -1,12 +1,12 @@
 // src/Infrastructure/redis/listeners/AlertListener.js
-const redisConfig = require('../Config/RedisConfig');
+const RedisConfig = require('../config/redisConfig');
 const sensorRouterController = require('../../../Controllers/SensorRouterController');
 const logger = require('../../../log/logger');
 
 class AlertListener {
   constructor() {
-    this.sub = redisConfig.subClient;
-    this.channel = redisConfig.CHANNELS.ALERTS;
+    this.sub = RedisConfig.subClient;
+    this.channel = RedisConfig.CHANNELS.ALERTS;
     this.isRunning = false;
   }
 
@@ -39,6 +39,7 @@ class AlertListener {
 
         // Roteia para o seu controller (mesma lógica do WS)
         await sensorRouterController.rotear(sensor, data.value, data);
+        logger.debug(`✅ [ALERT_LISTENER] Mensagem processada para sensor ${sensor}:`, data);
 
       } catch (err) {
         logger.error(`❌ [ALERT_LISTENER] Erro ao processar mensagem: ${err.message}`);
