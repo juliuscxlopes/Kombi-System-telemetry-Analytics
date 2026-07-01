@@ -20,7 +20,8 @@ async function bootstrap() {
     });
     WsListener.start();
     metricsLooper.start();
-    alertListener.start()
+
+    AlertListener.start()
 
     process.on('SIGINT', async () => {
       logger.info("🛑 [SYSTEM] Parando Analytics...");
