@@ -21,7 +21,8 @@ class RedisConfig {
       ENGINE_STATE: 'motor:engine:state',
       ACTUATORS_STATE: 'motor:actuators:state',
       ALERTS: 'motor:alerts:state', 
-      METRICS: 'motor:metrics:state'                           
+      METRICS: 'motor:metrics:state',
+      DAMAGE_ALERTS: 'HSET:DAMAGE_ALERTS',                          
     };
 
     this._initEvents();
