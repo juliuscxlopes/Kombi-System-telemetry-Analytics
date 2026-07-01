@@ -28,9 +28,6 @@ class RedisConfig {
       DAMAGE_ALERTS: 'motor:damage:state',                          
     };
 
-    // 📢 Cliente dedicado EXCLUSIVAMENTE para escuta (SUBSCRIBE)
-    this.STREAMS = { LOG: 'History:stream:log' };
-    this.HASHES = { /* ... seus hashes ... */ };
     this.CHANNELS = {
       TELEMETRY: 'channel:telemetry',
       ALERTS: 'channel:alerts',
