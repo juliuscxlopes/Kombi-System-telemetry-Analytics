@@ -2,6 +2,7 @@ const deltaCalculator = require('./DeltaCalculator');
 const etaCalculator   = require('./ETACalculator');
 const classificador   = require('./Classificador');
 const metricsSpecs    = require('./metrics_specs.json');
+const redisConfig     = require('../../../Infra/Redis/config/redisConfig');
 const logger          = require('../../../log/logger');
 
 class ThermalEngineMath {
@@ -11,23 +12,50 @@ class ThermalEngineMath {
   }
 
   /**
-   * @param {String} sensorName
-   * @param {Object} historicos      — { '30s': [], '1m': [], ... }
-   * @param {Object} ticketContext   — { valorNaAbertura, aberturaTs } | null
+   * Busca valorNaAbertura direto do Redis — fonte de verdade única
+   * Retorna null se não houver ticket ativo
    */
-  processar(sensorName, historicos, ticketContext = null) {
+  async _buscarTicketContext(sensorName) {
+    try {
+      const raw = await redisConfig.client.hget(redisConfig.HASHES.ALERTS, sensorName);
+      if (!raw) return null;
+
+      const ticket = JSON.parse(raw);
+
+      if (!['ABERTO', 'ESCALONADO', 'REBAIXADO'].includes(ticket.lifecycle)) return null;
+      if (ticket.valorNaAbertura == null) return null;
+
+      return {
+        valorNaAbertura: ticket.valorNaAbertura,
+        aberturaTs:      ticket.aberturaTs
+      };
+    } catch (err) {
+      logger.error(`❌ [ThermalEngineMath] Falha ao buscar ticketContext: ${err.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * @param {String} sensorName
+   * @param {Object} historicos  — { '30s': [], ... }
+   */
+  async processar(sensorName, historicos) {
     logger.debug(`[DEBUG] 🚀 [ThermalEngineMath.processar] Iniciando para sensor: ${sensorName}`);
-    
+
     const resultado = {
-      sensor:        sensorName,
+      sensor:          sensorName,
       tsProcessamento: Date.now(),
-      janelas:       {},
-      diagnostico:   null
+      janelas:         {},
+      diagnostico:     null
     };
 
-    logger.debug(`[DEBUG] 📖 [ThermalEngineMath] Buscando spec em metrics_specs.metrics_specs["${sensorName}"]`);
+    logger.debug(`[DEBUG] 📖 [ThermalEngineMath] Buscando spec em metrics_specs["${sensorName}"]`);
     const spec = metricsSpecs.metrics_specs[sensorName];
     logger.debug(`[DEBUG] 🔍 [ThermalEngineMath] Spec encontrada: ${spec ? 'SIM' : 'NÃO (undefined)'}`);
+
+    // Busca ticketContext do Redis — única fonte de verdade
+    const ticketContext = await this._buscarTicketContext(sensorName);
+    logger.debug(`[DEBUG] 🎫 [ThermalEngineMath] TicketContext: ${ticketContext ? `valorNaAbertura=${ticketContext.valorNaAbertura}` : 'null'}`);
 
     for (const janela of this.janelas) {
       const historyPoints = historicos[janela];
@@ -44,17 +72,17 @@ class ThermalEngineMath {
       const eta         = etaCalculator.calcular(valorAtual, deltaJanela.taxaPorMinuto, sensorName);
 
       resultado.janelas[janela] = {
-        sensor:             sensorName,
+        sensor:            sensorName,
         janela,
-        atual:              valorAtual,
-        delta:              deltaJanela.delta,
-        taxaPorMinuto:      deltaJanela.taxaPorMinuto,
-        tendencia:          deltaJanela.tendencia,
-        txtDelta:           deltaJanela.txtDelta,
-        projecoes:          eta.projecoes,
-        etaAlertaMinutos:   eta.etaAlertaMinutos,
-        etaCriticoMinutos:  eta.etaCriticoMinutos,
-        limiteAlvo:         eta.limiteAlvo
+        atual:             deltaJanela.valorAtual,
+        delta:             deltaJanela.delta,
+        taxaPorMinuto:     deltaJanela.taxaPorMinuto,
+        tendencia:         deltaJanela.tendencia,
+        txtDelta:          deltaJanela.txtDelta,
+        projecoes:         eta.projecoes,
+        etaAlertaMinutos:  eta.etaAlertaMinutos,
+        etaCriticoMinutos: eta.etaCriticoMinutos,
+        limiteAlvo:        eta.limiteAlvo
       };
 
       // Diagnóstico na janela de 30s — mais reativo

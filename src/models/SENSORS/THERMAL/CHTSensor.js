@@ -1,95 +1,90 @@
 // src/models/SENSORS/THERMAL/CHTSensor.js
-const redisConfig = require('../../../Infra/Redis/config/redisConfig');
-const historyCollector = require('../../HISTORY/HistoryCollector.js');
+const redisConfig       = require('../../../Infra/Redis/config/redisConfig');
+const historyCollector  = require('../../HISTORY/HistoryCollector.js');
 const thermalEngineMath = require('../../MATH/THERMAL/ThermalEngineMath.js');
-const TicketManager = require('../../TICKET/TicketManager.js');
-const wsEmitter = require('../../../Infra/websocket/WsEmitter.js');
-const logger = require('../../../log/logger.js');
+const TicketManager     = require('../../TICKET/TicketManager.js');
+const wsEmitter         = require('../../../Infra/websocket/WsEmitter.js');
+const logger            = require('../../../log/logger.js');
 
 class CHTSensor {
   constructor() {
-    this.sensorName = 'CHT';
-    this.ticketManager = new TicketManager(this.sensorName);
-    this.ticketAtivo = null;
+    this.sensorName        = 'CHT';
+    this.ticketManager     = new TicketManager(this.sensorName);
+    this.ticketAtivo       = null;  // referência leve — só id e lifecycle
     this.ultimoDiagnostico = null;
   }
 
   async processar(value, origem) {
     try {
 
-      // Se não veio valor — busca o atual no engine state
+      // Se não veio valor — busca o atual no ENGINE_STATE
       if (value === null || value === undefined) {
         const raw = await redisConfig.client.hget(redisConfig.HASHES.ENGINE_STATE, this.sensorName);
         if (!raw) {
           logger.warn(`⚠️  [CHT_SENSOR] Sem valor no engine state — abortando pipeline.`);
           return;
         }
-        const estado = JSON.parse(raw);
-        value = estado.value;
-        //logger.debug(`🔄 [CHT_SENSOR] Valor buscado do engine state: ${value}`);
+        value = JSON.parse(raw).value;
       }
-
-      //logger.info(`🔵 [CHT_SENSOR] Iniciando pipeline | value: ${value} | origem: ${origem ?? 'WS'}`);
 
       // 1. HISTÓRICOS
       const historicos = await historyCollector.coletar(this.sensorName);
-      //logger.debug(`📚 [CHT_SENSOR] Históricos coletados | 30s: ${historicos['30s']?.length ?? 0} | 1m: ${historicos['1m']?.length ?? 0} | 3m: ${historicos['3m']?.length ?? 0} | 5m: ${historicos['5m']?.length ?? 0}`);
 
       // 2. MATH
-      const resultado = thermalEngineMath.processar(this.sensorName, historicos);
+      // ticketContext vem do Redis via ThermalEngineMath — sensor não monta mais isso
+      const resultado   = await thermalEngineMath.processar(this.sensorName, historicos);
       const diagnostico = resultado.diagnostico;
-      //logger.debug(`🧮 [CHT_SENSOR] Math concluído | Severidade: ${diagnostico?.severidade} | Predictive: ${diagnostico?.predictive?.tipo ?? 'null'} | Janelas disponíveis: ${Object.keys(resultado.janelas).filter(j => resultado.janelas[j].disponivel !== false).join(', ')}`);
+
+      logger.info(`🔵 [CHT_SENSOR] Math | Nível: ${diagnostico.nivel} | Votos: taxa=${diagnostico.votos?.taxa} proj=${diagnostico.votos?.projecao} ticket=${diagnostico.deltaTicket?.estado ?? 'SEM_TICKET'} | Predictive: ${diagnostico.predictive?.tipo ?? 'null'} | Origem: ${origem ?? 'WS'}`);
 
       // 3. TICKET MANAGER
-      const ticketPayload = await this.ticketManager.processar(diagnostico.severidade, diagnostico);
-      //logger.debug(`🎫 [CHT_SENSOR] Ticket | Lifecycle: ${ticketPayload.lifecycle} | Ticket: ${ticketPayload.ticket ?? 'null'}`);
+      const ticketPayload = await this.ticketManager.processar(diagnostico.nivel, diagnostico);
 
-      // Atualiza estado interno
+      // Atualiza referência local leve
       this.ultimoDiagnostico = resultado;
-      if (ticketPayload.lifecycle === 'FECHADO') this.ticketAtivo = null;
-      else if (ticketPayload.lifecycle !== 'DEBOUNCED' && ticketPayload.lifecycle !== 'NOOP') {
-        this.ticketAtivo = ticketPayload;
+      if (ticketPayload.lifecycle === 'FECHADO') {
+        this.ticketAtivo = null;
+      } else if (ticketPayload.lifecycle === 'ABERTO') {
+        this.ticketAtivo = { ticket: ticketPayload.ticket, lifecycle: 'ABERTO' };
+      } else if (ticketPayload.lifecycle !== 'DEBOUNCED' && ticketPayload.lifecycle !== 'NOOP') {
+        this.ticketAtivo = { ...this.ticketAtivo, lifecycle: ticketPayload.lifecycle };
       }
 
-      // 4. ATUALIZA METRICS — sempre, independente do lifecycle
+      // 4. ATUALIZA METRICS — sempre
       await redisConfig.client.hset(
         redisConfig.HASHES.METRICS,
         this.sensorName,
         JSON.stringify({
-          sensor: this.sensorName,
-          origem: origem ?? 'WS',
+          sensor:    this.sensorName,
+          origem:    origem ?? 'WS',
           timestamp: Date.now(),
           diagnostico
         })
       );
 
       // DEBOUNCED ou NOOP — encerra após atualizar metrics
-      if (ticketPayload.lifecycle === 'DEBOUNCED' || ticketPayload.lifecycle === 'NOOP') {
-        //logger.debug(`⏭️  [CHT_SENSOR] ${ticketPayload.lifecycle} — pipeline encerrado.`);
-        return;
-      }
+      if (ticketPayload.lifecycle === 'DEBOUNCED' || ticketPayload.lifecycle === 'NOOP') return;
 
       // 5. ATUADOR PREDITIVO
       if (diagnostico.predictive) {
         const { actuator, intensity, tipo } = diagnostico.predictive;
-        wsEmitter.broadcast(actuator,intensity);
-        logger.info(`⚡ [CHT_SENSOR] Preditivo disparado | ${actuator} → ${intensity}`);
+        wsEmitter.broadcast(actuator, intensity);
+        logger.info(`⚡ [CHT_SENSOR] Preditivo disparado | ${actuator} → ${intensity} (${tipo})`);
       }
 
       // 6. BROADCAST FRONTEND
       const payloadHealth = {
-        ticket: ticketPayload.ticket,
-        sensor: this.sensorName,
-        origem: origem ?? 'WS',
+        ticket:    ticketPayload.ticket,
+        sensor:    this.sensorName,
+        origem:    origem ?? 'WS',
         lifecycle: ticketPayload.lifecycle,
         timestamp: Date.now(),
-        janelas: resultado.janelas,
+        janelas:   resultado.janelas,
         diagnostico
       };
 
       wsEmitter.broadcast('health', payloadHealth);
-
-      logger.info(`📡 [CHT_SENSOR] Pipeline concluído | Ticket: ${ticketPayload.ticket} | Severidade: ${diagnostico.severidade} | Lifecycle: ${ticketPayload.lifecycle} | Origem: ${origem ?? 'WS'}`);
+      logger.info(`📡 [CHT_SENSOR] Pipeline concluído | Ticket: ${ticketPayload.ticket} | Nível: ${diagnostico.nivel} | Lifecycle: ${ticketPayload.lifecycle}`);
 
     } catch (err) {
       logger.error(`❌ [CHT_SENSOR] Falha no pipeline: ${err.message}`);
@@ -98,8 +93,8 @@ class CHTSensor {
 
   getEstado() {
     return {
-      ticketAtivo: this.ticketAtivo,
-      diagnostico: this.ultimoDiagnostico
+      ticketAtivo:  this.ticketAtivo,
+      diagnostico:  this.ultimoDiagnostico
     };
   }
 }
