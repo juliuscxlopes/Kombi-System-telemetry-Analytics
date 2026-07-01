@@ -4,14 +4,14 @@ require('dotenv').config();
 class RedisConfig {
   constructor() {
     
-    this.client = new Redis({
+    const client = {
       
       host: process.env.REDIS_HOST || 'redis-msg-center',
       port: parseInt(process.env.REDIS_PORT, 10) || 6379,
       password: process.env.REDIS_PASSWORD || undefined, 
       maxRetriesPerRequest: null,
       retryStrategy: (times) => Math.min(times * 50, 2000), // Reconexão agressiva para ambiente embarcado
-    });
+    };
     this.client = new Redis(client);
     this.subClient = new Redis(client);
     
