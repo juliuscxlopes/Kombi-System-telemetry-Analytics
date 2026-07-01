@@ -41,6 +41,10 @@ class RedisConfig {
   _initEvents() {
     this.client.on('connect', () => console.log('🧠 [CORE-REDIS] Conectado ao Barramento Central via Kernel.'));
     this.client.on('error', (err) => console.error('🚨 [CORE-REDIS] Erro de conexão no barramento:', err.message));
+
+    this.subClient.on('connect', () => console.log('🎧 [SUB-REDIS] Subscriber conectado.'));
+    this.subClient.on('error', (err) => console.error('🚨 [SUB-REDIS] Erro no subscriber:', err.message));
+    
   }
 }
 
