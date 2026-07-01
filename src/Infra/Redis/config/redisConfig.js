@@ -17,7 +17,7 @@ class RedisConfig {
     
     // 🎯 Chaves únicas, namespaces e centralizadas (Single Source of Truth)
     this.STREAMS = {
-      LOG: 'History:stream:log',// Linha do tempo central
+      LOG: 'barramento:stream:log',// Linha do tempo central
     };
 
     this.HASHES = {
