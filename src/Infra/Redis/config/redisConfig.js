@@ -12,7 +12,8 @@ class RedisConfig {
       maxRetriesPerRequest: null,
       retryStrategy: (times) => Math.min(times * 50, 2000), // Reconexão agressiva para ambiente embarcado
     });
-    
+    this.client = new Redis(client);
+    this.subClient = new Redis(client);
     
     // 🎯 Chaves únicas, namespaces e centralizadas (Single Source of Truth)
     this.STREAMS = {
@@ -28,8 +29,6 @@ class RedisConfig {
     };
 
     // 📢 Cliente dedicado EXCLUSIVAMENTE para escuta (SUBSCRIBE)
-    this.subClient = new Redis(commonConfig);
-
     this.STREAMS = { LOG: 'History:stream:log' };
     this.HASHES = { /* ... seus hashes ... */ };
     this.CHANNELS = {
