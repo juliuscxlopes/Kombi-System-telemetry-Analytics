@@ -1,16 +1,16 @@
 // src/models/SENSORS/THERMAL/OilTSensor.js
 const redisConfig       = require('../../../Infra/Redis/config/redisConfig');
+const redisWriter       = require('../../../Infra/Redis/writer/RedisWriterService');
 const historyCollector  = require('../../HISTORY/HistoryCollector.js');
 const thermalEngineMath = require('../../MATH/THERMAL/ThermalEngineMath.js');
 const TicketManager     = require('../../TICKET/TicketManager.js');
-const wsEmitter         = require('../../../Infra/websocket/WsEmitter.js');
 const logger            = require('../../../log/logger.js');
 
 class OILTSensor {
   constructor() {
     this.sensorName        = 'OIL_TEMP';
     this.ticketManager     = new TicketManager(this.sensorName);
-    this.ticketAtivo       = null;  // referência leve — só id e lifecycle
+    this.ticketAtivo       = null;
     this.ultimoDiagnostico = null;
   }
 
@@ -50,40 +50,35 @@ class OILTSensor {
         this.ticketAtivo = { ...this.ticketAtivo, lifecycle: ticketPayload.lifecycle };
       }
 
-      // 4. ATUALIZA METRICS — sempre
-      await redisConfig.client.hset(
-        redisConfig.HASHES.METRICS,
-        this.sensorName,
-        JSON.stringify({
-          sensor:    this.sensorName,
-          origem:    origem ?? 'WS',
-          timestamp: Date.now(),
-          diagnostico
-        })
-      );
-
       // DEBOUNCED ou NOOP — encerra após atualizar metrics
       if (ticketPayload.lifecycle === 'DEBOUNCED' || ticketPayload.lifecycle === 'NOOP') return;
 
-      // 5. ATUADOR PREDITIVO
+      // 5. ATUADOR PREDITIVO — intenção calculada pelo analytics
       if (diagnostico.predictive) {
         const { actuator, intensity, tipo } = diagnostico.predictive;
-        wsEmitter.broadcast(actuator, intensity);
+
+        const actuatorPayload = {
+          sensor:      this.sensorName,
+          actuator,
+          intensity,
+          tipo,
+          motivos:     diagnostico.motivos ?? [],
+          ticket:      ticketPayload.ticket,
+          ts:          Date.now()
+        };
+
+        await redisWriter.write({
+          hashKey:   redisConfig.HASHES.ACTUATORS_STATE,
+          field:     actuator,
+          streamKey: redisConfig.STREAMS.LOG,
+          channel:   redisConfig.CHANNELS.ACTUATORS,
+          tipo:      'ACTUATOR_INTENT',
+          payload:   actuatorPayload
+        });
+
         logger.info(`⚡ [OILT_SENSOR] Preditivo disparado | ${actuator} → ${intensity} (${tipo})`);
       }
 
-      // 6. BROADCAST FRONTEND
-      const payloadHealth = {
-        ticket:    ticketPayload.ticket,
-        sensor:    this.sensorName,
-        origem:    origem ?? 'WS',
-        lifecycle: ticketPayload.lifecycle,
-        timestamp: Date.now(),
-        janelas:   resultado.janelas,
-        diagnostico
-      };
-
-      wsEmitter.broadcast('health', payloadHealth);
       logger.info(`📡 [OILT_SENSOR] Pipeline concluído | Ticket: ${ticketPayload.ticket} | Nível: ${diagnostico.nivel} | Lifecycle: ${ticketPayload.lifecycle}`);
 
     } catch (err) {

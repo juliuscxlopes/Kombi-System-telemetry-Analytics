@@ -31,6 +31,7 @@ class RedisConfig {
     this.CHANNELS = {
       TELEMETRY: 'channel:telemetry',
       ALERTS: 'channel:alerts',
+      ACTUATORS: 'channel:actuators',
     };
 
     this._initEvents();

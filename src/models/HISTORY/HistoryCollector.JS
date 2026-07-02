@@ -7,21 +7,18 @@ class HistoryCollector {
     this.streamLogKey = 'barramento:stream:log';
     this.janelas = {
       '30s': 30 * 1000,
-      '1m':  60 * 1000,
-      '3m': 180 * 1000,
-      '5m': 300 * 1000
     };
   }
 
   /**
    * Coleta e retorna histórico particionado por janela.
    * @param {String} sensorName
-   * @returns {{ '30s': [], '1m': [], '3m': [], '5m': [] }}
+   * @returns {{ '30s': [] }}
    */
   async coletar(sensorName) {
     try {
       const agora = Date.now();
-      const tempoAtrasMax = agora - this.janelas['5m'];
+      const tempoAtrasMax = agora - this.janelas['30s'];
 
       const registrosStream = await redisConfig.client.xrange(
         this.streamLogKey,
@@ -31,7 +28,7 @@ class HistoryCollector {
 
       if (!registrosStream || registrosStream.length === 0) {
         logger.warn(`⚠️ [HISTORY_COLLECTOR] Nenhum dado encontrado para ${sensorName}`);
-        return { '30s': [], '1m': [], '3m': [], '5m': [] };
+        return { '30s': []};
       }
 
       const allPoints = this._parseRegistros(registrosStream, sensorName);
@@ -48,7 +45,7 @@ class HistoryCollector {
 
     } catch (err) {
       logger.error(`❌ [HISTORY_COLLECTOR] Erro ao coletar histórico de ${sensorName}: ${err.message}`);
-      return { '30s': [], '1m': [], '3m': [], '5m': [] };
+      return { '30s': []};
     }
   }
 

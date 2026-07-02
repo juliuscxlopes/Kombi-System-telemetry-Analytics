@@ -3,6 +3,7 @@ const etaCalculator   = require('./ETACalculator');
 const classificador   = require('./Classificador');
 const metricsSpecs    = require('./metrics_specs.json');
 const redisConfig     = require('../../../Infra/Redis/config/redisConfig');
+const redisWriter     = require('../../../Infra/Redis/writer/RedisWriterService');
 const logger          = require('../../../log/logger');
 
 class ThermalEngineMath {
@@ -11,10 +12,6 @@ class ThermalEngineMath {
     this.janelas = ['30s'];
   }
 
-  /**
-   * Busca valorNaAbertura direto do Redis — fonte de verdade única
-   * Retorna null se não houver ticket ativo
-   */
   async _buscarTicketContext(sensorName) {
     try {
       const raw = await redisConfig.client.hget(redisConfig.HASHES.ALERTS, sensorName);
@@ -35,10 +32,6 @@ class ThermalEngineMath {
     }
   }
 
-  /**
-   * @param {String} sensorName
-   * @param {Object} historicos  — { '30s': [], ... }
-   */
   async processar(sensorName, historicos) {
     logger.debug(`[DEBUG] 🚀 [ThermalEngineMath.processar] Iniciando para sensor: ${sensorName}`);
 
@@ -49,13 +42,12 @@ class ThermalEngineMath {
       diagnostico:     null
     };
 
-    logger.debug(`[DEBUG] 📖 [ThermalEngineMath] Buscando spec em metrics_specs["${sensorName}"]`);
+    //logger.debug(`[DEBUG] 📖 [ThermalEngineMath] Buscando spec em metrics_specs["${sensorName}"]`);
     const spec = metricsSpecs.metrics_specs[sensorName];
-    logger.debug(`[DEBUG] 🔍 [ThermalEngineMath] Spec encontrada: ${spec ? 'SIM' : 'NÃO (undefined)'}`);
+    //logger.debug(`[DEBUG] 🔍 [ThermalEngineMath] Spec encontrada: ${spec ? 'SIM' : 'NÃO (undefined)'}`);
 
-    // Busca ticketContext do Redis — única fonte de verdade
     const ticketContext = await this._buscarTicketContext(sensorName);
-    logger.debug(`[DEBUG] 🎫 [ThermalEngineMath] TicketContext: ${ticketContext ? `valorNaAbertura=${ticketContext.valorNaAbertura}` : 'null'}`);
+    //logger.debug(`[DEBUG] 🎫 [ThermalEngineMath] TicketContext: ${ticketContext ? `valorNaAbertura=${ticketContext.valorNaAbertura}` : 'null'}`);
 
     for (const janela of this.janelas) {
       const historyPoints = historicos[janela];
@@ -85,16 +77,15 @@ class ThermalEngineMath {
         limiteAlvo:        eta.limiteAlvo
       };
 
-      // Diagnóstico na janela de 30s — mais reativo
       if (janela === '30s') {
-        logger.debug(`[DEBUG] ⚙️ [ThermalEngineMath] Calculando delta ticket para 30s`);
+        //logger.debug(`[DEBUG] ⚙️ [ThermalEngineMath] Calculando delta ticket para 30s`);
         const deltaTicket = deltaCalculator.calcularTicket(
           valorAtual,
           ticketContext?.valorNaAbertura ?? null,
           spec?.delta_ticket
         );
 
-        logger.debug(`[DEBUG] 🧠 [ThermalEngineMath] Chamando classificador.classificar()`);
+        //logger.debug(`[DEBUG] 🧠 [ThermalEngineMath] Chamando classificador.classificar()`);
         resultado.diagnostico = classificador.classificar(
           sensorName,
           deltaJanela,
@@ -103,7 +94,7 @@ class ThermalEngineMath {
         );
 
         resultado.diagnostico.deltaTicket = deltaTicket;
-        logger.debug(`[DEBUG] ✅ [ThermalEngineMath] Diagnóstico de 30s concluído com sucesso.`);
+        //logger.debug(`[DEBUG] ✅ [ThermalEngineMath] Diagnóstico de 30s concluído com sucesso.`);
       }
     }
 
@@ -118,8 +109,28 @@ class ThermalEngineMath {
       logger.debug(`🟢 [MATH:${sensorName}] Diagnóstico padrão — janela 30s indisponível.`);
     }
 
+// 🔵 PAYLOAD ESTRUTURADO — { sensor, ts, metrics: { janelas, diagnostico } }
+    const payload = {
+      sensor: sensorName,
+      ts:     resultado.tsProcessamento,
+      metrics: {
+        janelas:     resultado.janelas,
+        diagnostico: resultado.diagnostico
+      }
+    };
+
+    // 🔵 EMISSOR PRÓPRIO DO THERMAL — HSET + Stream + Pub/Sub
+    await redisWriter.write({
+      hashKey:   redisConfig.HASHES.METRICS,
+      field:     sensorName,
+      streamKey: redisConfig.STREAMS.LOG,
+      channel:   redisConfig.CHANNELS.TELEMETRY,
+      tipo:      'TELEMETRY',
+      payload
+    });
+
     logger.debug(`[DEBUG] 🏁 [ThermalEngineMath.processar] Finalizado processamento para ${sensorName}`);
-    return resultado;
+    return resultado; // função continua retornando o resultado "cru", sem envelope, pro resto do pipeline usar como já usa
   }
 }
 

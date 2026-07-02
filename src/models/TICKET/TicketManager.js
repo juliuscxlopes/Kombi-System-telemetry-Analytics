@@ -1,4 +1,5 @@
 const redisConfig = require('../../Infra/Redis/config/redisConfig');
+const redisWriter = require('../../Infra/Redis/writer/RedisWriterService');
 const logger = require('../../log/logger');
 
 class TicketManager {
@@ -83,7 +84,19 @@ class TicketManager {
             duracaoMs,
             duracaoSeg:   Math.round(duracaoMs / 1000)
           });
+
+          // Remove o ticket do Hash — FECHADO não é estado persistente
           await redisConfig.client.hdel(redisConfig.HASHES.ALERTS, this.sensorName);
+
+          // Registra na Stream e publica o evento de fechamento
+          await redisWriter.write({
+            streamKey: redisConfig.STREAMS.LOG,
+            channel:   redisConfig.CHANNELS.ALERTS,
+            field:     this.sensorName,
+            tipo:      'ALERT',
+            payload
+          });
+
           logger.info(`✅ [TICKET_MANAGER:${this.sensorName}] Ticket FECHADO ${ticketAtivo.ticket} | Duração: ${Math.round(duracaoMs / 1000)}s`);
           return payload;
         }
@@ -108,7 +121,16 @@ class TicketManager {
           aberturaTs:    Date.now(),
           valorNaAbertura                // ← persistido aqui, usado pelo DeltaCalculator
         });
-        await redisConfig.client.hset(redisConfig.HASHES.ALERTS, this.sensorName, JSON.stringify(payload));
+
+        await redisWriter.write({
+          hashKey:   redisConfig.HASHES.ALERTS,
+          field:     this.sensorName,
+          streamKey: redisConfig.STREAMS.LOG,
+          channel:   redisConfig.CHANNELS.ALERTS,
+          tipo:      'ALERT',
+          payload
+        });
+
         logger.warn(`🆕 [TICKET_MANAGER:${this.sensorName}] Ticket ABERTO ${novoTicket} | Status: ${statusAtual} | Valor abertura: ${valorNaAbertura}`);
         return payload;
       }
@@ -129,7 +151,16 @@ class TicketManager {
           valorNaAbertura: ticketAtivo.valorNaAbertura,  // ← preserva o valor original
           escalonamentoTs: Date.now()
         });
-        await redisConfig.client.hset(redisConfig.HASHES.ALERTS, this.sensorName, JSON.stringify(payload));
+
+        await redisWriter.write({
+          hashKey:   redisConfig.HASHES.ALERTS,
+          field:     this.sensorName,
+          streamKey: redisConfig.STREAMS.LOG,
+          channel:   redisConfig.CHANNELS.ALERTS,
+          tipo:      'ALERT',
+          payload
+        });
+
         logger.warn(`📈 [TICKET_MANAGER:${this.sensorName}] Ticket ESCALONADO ${ticketAtivo.ticket} | ${ticketAtivo.status} → ${statusAtual}`);
         return payload;
       }
@@ -140,7 +171,16 @@ class TicketManager {
           valorNaAbertura: ticketAtivo.valorNaAbertura,  // ← preserva o valor original
           rebaixamentoTs:  Date.now()
         });
-        await redisConfig.client.hset(redisConfig.HASHES.ALERTS, this.sensorName, JSON.stringify(payload));
+
+        await redisWriter.write({
+          hashKey:   redisConfig.HASHES.ALERTS,
+          field:     this.sensorName,
+          streamKey: redisConfig.STREAMS.LOG,
+          channel:   redisConfig.CHANNELS.ALERTS,
+          tipo:      'ALERT',
+          payload
+        });
+
         logger.info(`📉 [TICKET_MANAGER:${this.sensorName}] Ticket REBAIXADO ${ticketAtivo.ticket} | ${ticketAtivo.status} → ${statusAtual}`);
         return payload;
       }
